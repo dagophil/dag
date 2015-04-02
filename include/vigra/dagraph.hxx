@@ -63,6 +63,12 @@ protected:
     /// \brief Node container, the node id matches the index.
     std::vector<NodeT> nodes_;
 
+    /// \brief Index of the first root node.
+    int first_root_node_;
+
+    /// \brief Index of the first leaf node.
+    int first_leaf_node_;
+
     /// \brief Arc container.
     std::vector<ArcT> arcs_;
 
@@ -99,10 +105,41 @@ public:
         }
     }
 
+    /// \brief Print all root nodes.
+    void print_root_nodes() const
+    {
+        std::cout << "Root nodes:";
+
+        int current = first_root_node_;
+        while (current != -1)
+        {
+            std::cout << " " << current;
+            current = nodes_[current].next_root;
+        }
+        std::cout << std::endl;
+    }
+
+    /// \brief Print all leaf nodes.
+    void print_leaf_nodes() const
+    {
+        std::cout << "Leaf nodes: ";
+
+        int current = first_leaf_node_;
+        while (current != -1)
+        {
+            std::cout << " " << current;
+            current = nodes_[current].next_leaf;
+        }
+        std::cout << std::endl;
+    }
+
 protected:
 
     /// \brief Since you cannot add or remove elements, the default constructor will always yield an empty graph, and that's why it is hidden.
     StaticDAGraph()
+        :
+          first_root_node_(-1),
+          first_leaf_node_(-1)
     {
     }
 
@@ -115,20 +152,37 @@ StaticDAGraph StaticDAGraph::build(
         std::vector<std::pair<int, int> > const & arcs
 ){
     StaticDAGraph g;
-    g.nodes_.resize(num_nodes, {-1, -1, -1, -1, -1, -1});
+    if (num_nodes == 0)
+        return g;
 
+    // Create a graph with only root and leaf nodes.
+    g.nodes_.reserve(num_nodes);
+    for (int i = 0; i < num_nodes; ++i)
+    {
+        g.nodes_.push_back({-1, -1, i-1, i+1, i-1, i+1});
+    }
+    g.nodes_.front().prev_root = -1;
+    g.nodes_.front().prev_leaf = -1;
+    g.nodes_.back().next_root = -1;
+    g.nodes_.back().next_leaf = -1;
+    g.first_root_node_ = 0;
+    g.first_leaf_node_ = 0;
+
+    // Add the arcs to the graph.
     for (auto const & a : arcs)
     {
         if (a.first < 0 || a.first >= num_nodes || a.second < 0 || a.second >= num_nodes)
             throw std::runtime_error("StaticDAGraph::build(): Node index out of range.");
 
-        NodeT & u = g.nodes_[a.first];
-        NodeT & v = g.nodes_[a.second];
+        int u_id = a.first;
+        int v_id = a.second;
+        NodeT & u = g.nodes_[u_id];
+        NodeT & v = g.nodes_[v_id];
 
         int arcid = g.arcs_.size();
         ArcT arc;
-        arc.source = a.first;
-        arc.target = a.second;
+        arc.source = u_id;
+        arc.target = v_id;
         arc.prev_out = -1;
         arc.prev_in = -1;
 
@@ -158,7 +212,25 @@ StaticDAGraph StaticDAGraph::build(
             arc.next_in = v.first_in;
         }
 
-        // TODO: Modify root and leaf descriptors.
+        // Modify leaf descriptors of u, its predecessor and its successor.
+        if (u.next_leaf != -1)
+            g.nodes_[u.next_leaf].prev_leaf = u.prev_leaf;
+        if (u.prev_leaf != -1)
+            g.nodes_[u.prev_leaf].next_leaf = u.next_leaf;
+        else if (u_id == g.first_leaf_node_)
+            g.first_leaf_node_ = u.next_leaf;
+        u.prev_leaf = -1;
+        u.next_leaf = -1;
+
+        // Modify root descriptors of v, its predecessor and its successor.
+        if (v.next_root != -1)
+            g.nodes_[v.next_root].prev_root = v.prev_root;
+        if (v.prev_root != -1)
+            g.nodes_[v.prev_root].next_root = v.next_root;
+        else if (v_id == g.first_root_node_)
+            g.first_root_node_ = v.next_root;
+        v.prev_root = -1;
+        v.next_root = -1;
 
         g.arcs_.push_back(arc);
     }

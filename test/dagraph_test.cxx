@@ -14,5 +14,7 @@ int main()
 
     vigra::StaticDAGraph g = vigra::StaticDAGraph::build(8, arcs);
     g.print();
+    g.print_root_nodes();
+    g.print_leaf_nodes();
 
 }
