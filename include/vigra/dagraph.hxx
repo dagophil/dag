@@ -13,10 +13,93 @@ namespace vigra
 
 
 /// \brief Base class for a static directed acyclic graph (static: no nodes or edges can be added/removed).
-class StaticDAGraph
+class StaticDAGraph0
 {
 
 protected:
+
+    /// \brief Node class.
+    /// \todo Replace this with vigra::detail::GenericNode<int> (vigra/graph_item_impl.hxx).
+    class Node
+    {
+    private:
+        friend class StaticDAGraph0;
+        friend class StaticForest0;
+
+    protected:
+
+        /// \brief Node id (= index in nodes_).
+        int id_;
+
+    public:
+
+        Node()
+        {}
+
+        explicit Node(int pid)
+            : id_(pid)
+        {}
+
+        Node(lemon::Invalid)
+            : id_(-1)
+        {}
+
+        int id() const
+        {
+            return id_;
+        }
+
+        bool operator==(Node const & other) const
+        {
+            return id_ == other.id_;
+        }
+
+        bool operator!=(Node const & other) const
+        {
+            return id_ != other.id_;
+        }
+    };
+
+    /// \brief Arc class.
+    /// \todo Replace this with vigra::detail::GenericArc<int> (vigra/graph_item_impl.hxx).
+    class Arc
+    {
+    private:
+        friend class StaticDAGraph0;
+
+    protected:
+
+        /// \brief Arc id (= index in arcs_).
+        int id_;
+
+    public:
+
+        Arc()
+        {}
+
+        explicit Arc(int pid)
+            : id_(pid)
+        {}
+
+        Arc(lemon::Invalid)
+            : id_(-1)
+        {}
+
+        int id() const
+        {
+            return id_;
+        }
+
+        bool operator==(Arc const & other) const
+        {
+            return id_ == other.id_;
+        }
+
+        bool operator!=(Arc const & other) const
+        {
+            return id_ != other.id_;
+        }
+    };
 
     struct NodeT {
         /// \brief Arc id of the first incoming arc.
@@ -74,10 +157,18 @@ protected:
 
 public:
 
+    typedef Node Node;
+    typedef Arc Arc;
+    typedef NodeT NodeT;
+    typedef ArcT ArcT;
+
+    class OutArcIt;
+    class InArcIt;
+
     /// \brief Construct the graph from a vector of pairs.
     /// \param num_nodes: Number of nodes.
     /// \param arcs: The pairs in this vector give the ids of the nodes that are connected by an arc.
-    static StaticDAGraph build(
+    static StaticDAGraph0 build(
             size_t num_nodes,
             std::vector<std::pair<int, int> > const & arcs
     );
@@ -92,6 +183,52 @@ public:
     size_t numArcs() const
     {
         return arcs_.size();
+    }
+
+    /// \brief Find the first outgoing arc of a given node.
+    /// \param[out] a: The first outgoing arc of n.
+    /// \param n: The node.
+    /// \todo: Change the order of arguments (output last).
+    void firstOut(Arc & a, Node const & n) const
+    {
+        a.id_ = nodes_[n.id_].first_out;
+    }
+
+    /// \brief Replace an outgoing arc by the next outgoing arc.
+    /// \param[in/out] a: The arc.
+    void nextOut(Arc & a) const
+    {
+        a.id_ = arcs_[a.id_].next_out;
+    }
+
+    /// \brief Find the first incoming arc of a given node.
+    /// \param[out] a: The first incoming arc of n.
+    /// \param n: The node.
+    /// \todo: Change the order of arguments (output last).
+    void firstIn(Arc & a, Node const & n) const
+    {
+        a.id_ = nodes_[n.id_].first_in;
+    }
+
+    /// \brief Replace an incoming arc by the next incoming arc.
+    /// \param[in/out] a: The arc.
+    void nextIn(Arc & a) const
+    {
+        a.id_ = arcs_[a.id_].next_in;
+    }
+
+    /// \brief Return the source node of an arc.
+    /// \param a: The arc.
+    Node source(Arc const & a)
+    {
+        return Node(arcs_[a.id_].source);
+    }
+
+    /// \brief Return the target node of an arc.
+    /// \param a: The arc.
+    Node target(Arc const & a)
+    {
+        return Node(arcs_[a.id_].target);
     }
 
     /// \brief Print the number of nodes and the arcs.
@@ -136,22 +273,81 @@ public:
 protected:
 
     /// \brief Since you cannot add or remove elements, the default constructor will always yield an empty graph, and that's why it is hidden.
-    StaticDAGraph()
-        :
-          first_root_node_(-1),
+    StaticDAGraph0()
+        : first_root_node_(-1),
           first_leaf_node_(-1)
     {
     }
 
 };
 
+class StaticDAGraph0::OutArcIt : public Arc
+{
+private:
+    const StaticDAGraph0* graph_;
+public:
+    OutArcIt()
+    {}
 
+    OutArcIt(lemon::Invalid)
+        : Arc(lemon::Invalid()),
+          graph_(nullptr)
+    {}
 
-StaticDAGraph StaticDAGraph::build(
+    OutArcIt(StaticDAGraph0 const & graph, Node const & n)
+        : graph_(&graph)
+    {
+        graph_->firstOut(*this, n);
+    }
+
+    OutArcIt(StaticDAGraph0 const & graph, Arc const & arc)
+        : Arc(arc),
+          graph_(&graph)
+    {}
+
+    OutArcIt & operator++()
+    {
+        graph_->nextOut(*this);
+        return *this;
+    }
+};
+
+class StaticDAGraph0::InArcIt : public Arc
+{
+private:
+    const StaticDAGraph0* graph_;
+public:
+    InArcIt()
+    {}
+
+    InArcIt(lemon::Invalid)
+        : Arc(lemon::Invalid()),
+          graph_(nullptr)
+    {}
+
+    InArcIt(StaticDAGraph0 const & graph, Node const & n)
+        : graph_(&graph)
+    {
+        graph_->firstIn(*this, n);
+    }
+
+    InArcIt(StaticDAGraph0 const & graph, Arc const & arc)
+        : Arc(arc),
+          graph_(&graph)
+    {}
+
+    InArcIt & operator++()
+    {
+        graph_->nextIn(*this);
+        return *this;
+    }
+};
+
+StaticDAGraph0 StaticDAGraph0::build(
         size_t num_nodes,
         std::vector<std::pair<int, int> > const & arcs
 ){
-    StaticDAGraph g;
+    StaticDAGraph0 g;
     if (num_nodes == 0)
         return g;
 
@@ -188,7 +384,6 @@ StaticDAGraph StaticDAGraph::build(
 
         if (u.first_out == -1)
         {
-            u.first_out = arcid;
             arc.next_out = -1;
         }
         else
@@ -198,10 +393,10 @@ StaticDAGraph StaticDAGraph::build(
             outarc.prev_out = arcid;
             arc.next_out = u.first_out;
         }
+        u.first_out = arcid;
 
         if (v.first_in == -1)
         {
-            v.first_in = arcid;
             arc.next_in = -1;
         }
         else
@@ -211,6 +406,7 @@ StaticDAGraph StaticDAGraph::build(
             inarc.prev_in = arcid;
             arc.next_in = v.first_in;
         }
+        v.first_in = arcid;
 
         // Modify leaf descriptors of u, its predecessor and its successor.
         if (u.next_leaf != -1)
@@ -237,6 +433,131 @@ StaticDAGraph StaticDAGraph::build(
 
     return g;
 }
+
+/// \todo Make the StaticForest0 a subclass of StaticDAGraph0.
+class StaticForest0
+{
+
+protected:
+
+    typedef StaticDAGraph0 Graph;
+
+    StaticForest0(StaticDAGraph0 && graph)
+        : graph_(graph)
+    {}
+
+public:
+
+    typedef Graph::Node Node;
+    typedef Graph::Arc Arc;
+    typedef Graph::NodeT NodeT;
+    typedef Graph::ArcT ArcT;
+
+    class OutArcIt : public Graph::OutArcIt
+    {
+    public:
+        OutArcIt()
+            : Graph::OutArcIt()
+        {}
+
+        OutArcIt(lemon::Invalid)
+            : Graph::OutArcIt(lemon::Invalid())
+        {}
+
+        OutArcIt(StaticForest0 const & forest, Node const & n)
+            : Graph::OutArcIt(forest.graph_, n)
+        {}
+
+        OutArcIt(StaticForest0 const & forest, Arc const & arc)
+            : Graph::OutArcIt(forest.graph_, arc)
+        {}
+
+        OutArcIt & operator++()
+        {
+            Graph::OutArcIt::operator++();
+            return *this;
+        }
+    };
+
+    class InArcIt : public Graph::InArcIt
+    {
+    public:
+        InArcIt()
+            : Graph::InArcIt()
+        {}
+
+        InArcIt(lemon::Invalid)
+            : Graph::InArcIt(lemon::Invalid())
+        {}
+
+        InArcIt(StaticForest0 const & forest, Node const & n)
+            : Graph::InArcIt(forest.graph_, n)
+        {}
+
+        InArcIt(StaticForest0 const & forest, Arc const & arc)
+            : Graph::InArcIt(forest.graph_, arc)
+        {}
+
+        InArcIt & operator++()
+        {
+            Graph::InArcIt::operator++();
+            return *this;
+        }
+    };
+
+    /// \brief Construct the forest from a vector of pairs.
+    /// \param num_nodes: Number of nodes.
+    /// \param arcs: The pairs in this vector give the ids of the nodes that are connected by an arc.
+    static StaticForest0 build(
+            size_t num_nodes,
+            std::vector<std::pair<int, int> > const & arcs
+    ){
+        StaticForest0 f(std::move(Graph::build(num_nodes, arcs)));
+        return f;
+    }
+
+    /// \brief Return the source node of the given arc.
+    /// \param a: The arc.
+    Node source(Arc const & a)
+    {
+        return graph_.source(a);
+    }
+
+    /// \brief Return the target node of the given arc.
+    /// \param a: The arc.
+    Node target(Arc const & a)
+    {
+        return graph_.target(a);
+    }
+
+    /// \brief Replace a node by its parent.
+    /// \param[in/out] n: The node that will be replace by its parent. If n is a root node, an invalid node will be returned.
+    void parent(Node & n)
+    {
+        InArcIt it(*this, n);
+        n.id_ = graph_.source(it).id();
+    }
+
+    void print()
+    {
+        graph_.print();
+    }
+
+    void print_root_nodes()
+    {
+        graph_.print_root_nodes();
+    }
+
+    void print_leaf_nodes()
+    {
+        graph_.print_leaf_nodes();
+    }
+
+private:
+
+    Graph graph_;
+
+};
 
 
 
