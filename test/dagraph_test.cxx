@@ -13,6 +13,7 @@ void test_dagraph0()
     typedef Graph::Node Node;
     typedef Graph::Arc Arc;
     typedef Graph::NodeIt NodeIt;
+    typedef Graph::ArcIt ArcIt;
 
     Graph g;
     Node a = g.addNode();
@@ -26,9 +27,13 @@ void test_dagraph0()
 
     for (NodeIt it(g); it != lemon::INVALID; ++it)
     {
-        std::cout << (*it).id() << std::endl;
+        std::cout << it->id() << std::endl;
     }
-    std::cout << "done" << std::endl;
+
+    for (ArcIt it(g); it != lemon::INVALID; ++it)
+    {
+        std::cout << g.source(*it).id() << " -> " << g.target(*it).id() << std::endl;
+    }
 }
 
 void test_staticdagraph0()

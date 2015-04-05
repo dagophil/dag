@@ -3,10 +3,8 @@
 
 #include <vector>
 #include <utility>
-#include <set> /// \note Needed for graph_item_impl.hxx.
 
 #include <vigra/graphs.hxx>
-#include <vigra/graph_item_impl.hxx>
 
 namespace vigra
 {
@@ -15,76 +13,193 @@ namespace vigra
 
 namespace detail
 {
-    template <typename GRAPH>
-    class NodeIt
+
+    template <typename GRAPH, typename ITEM>
+    class ItemIt
     {
     public:
 
         typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
+        typedef ITEM Item;
 
-        NodeIt(Graph const & graph);
+        ItemIt(Graph const & graph);
 
-        NodeIt(Graph const & graph, Node const & node);
+        ItemIt(Graph const & graph, Item const & item);
 
-        NodeIt & operator++();
+        ItemIt & operator++();
 
-        Node & operator*();
+        Item & operator*();
+
+        Item* operator->();
 
         bool valid() const;
 
     protected:
 
         Graph const & graph_;
-        Node current_;
-
+        Item current_;
     };
 
-    template <typename GRAPH>
-    NodeIt<GRAPH>::NodeIt(
+    template <typename GRAPH, typename ITEM>
+    ItemIt<GRAPH, ITEM>::ItemIt(
             const Graph & graph
     )   : graph_(graph),
-          current_(graph.firstNode())
-    {}
+          current_()
+    {
+        graph_.first(current_);
+    }
 
-    template <typename GRAPH>
-    NodeIt<GRAPH>::NodeIt(
-            Graph const & graph,
-            Node const & node
+    template <typename GRAPH, typename ITEM>
+    ItemIt<GRAPH, ITEM>::ItemIt(
+            const Graph & graph,
+            const Item & item
     )   : graph_(graph),
-          current_(node)
+          current_(item)
     {}
 
-    template <typename GRAPH>
-    NodeIt<GRAPH> & NodeIt<GRAPH>::operator++()
+    template <typename GRAPH, typename ITEM>
+    ItemIt<GRAPH, ITEM> & ItemIt<GRAPH, ITEM>::operator++()
     {
         current_ = graph_.next(current_);
         return *this;
     }
 
-    template <typename GRAPH>
-    typename NodeIt<GRAPH>::Node & NodeIt<GRAPH>::operator*()
+    template <typename GRAPH, typename ITEM>
+    typename ItemIt<GRAPH, ITEM>::Item & ItemIt<GRAPH, ITEM>::operator*()
     {
         return current_;
     }
 
-    template <typename GRAPH>
-    bool NodeIt<GRAPH>::valid() const
+    template <typename GRAPH, typename ITEM>
+    typename ItemIt<GRAPH, ITEM>::Item* ItemIt<GRAPH, ITEM>::operator->()
+    {
+        return &current_;
+    }
+
+    template <typename GRAPH, typename ITEM>
+    bool ItemIt<GRAPH, ITEM>::valid() const
     {
         return current_ != lemon::INVALID;
     }
 
-    template <typename GRAPH>
-    bool operator!=(NodeIt<GRAPH> const & it, lemon::Invalid)
+    template <typename GRAPH, typename ITEM>
+    bool operator==(ItemIt<GRAPH, ITEM> const & it, lemon::Invalid)
+    {
+        return !it.valid();
+    }
+
+    template <typename GRAPH, typename ITEM>
+    bool operator==(lemon::Invalid, ItemIt<GRAPH, ITEM> const & it)
+    {
+        return !it.valid();
+    }
+
+    template <typename GRAPH, typename ITEM>
+    bool operator!=(ItemIt<GRAPH, ITEM> const & it, lemon::Invalid)
     {
         return it.valid();
     }
 
-    template <typename GRAPH>
-    bool operator!=(lemon::Invalid, NodeIt<GRAPH> const & it)
+    template <typename GRAPH, typename ITEM>
+    bool operator!=(lemon::Invalid, ItemIt<GRAPH, ITEM> const & it)
     {
         return it.valid();
     }
+
+
+
+    /// \brief The GenericGraphNode class is just like GenericNode<INDEX_TYPE> in vigra/graph_item_impl.hxx, but with a setter for the id field.
+    template<class INDEX_TYPE>
+    class GenericGraphNode
+    {
+    public:
+
+        typedef INDEX_TYPE index_type;
+
+        GenericGraphNode(const lemon::Invalid & iv = lemon::INVALID)
+            : id_(-1)
+        {}
+
+        GenericGraphNode(const index_type id  )
+            : id_(id)
+        {}
+
+        bool operator == (const GenericGraphNode<INDEX_TYPE> & other ) const {
+            return id_ == other.id_;
+        }
+
+        bool operator != (const GenericGraphNode<INDEX_TYPE> & other ) const {
+            return id_ != other.id_;
+        }
+
+        bool operator < (const GenericGraphNode<INDEX_TYPE> & other ) const {
+            return id_ < other.id_;
+        }
+
+        bool operator > (const GenericGraphNode<INDEX_TYPE> & other ) const {
+            return id_ > other.id_;
+        }
+
+        index_type id() const {
+            return id_;
+        }
+
+        void set_id(index_type const & id) {
+            id_ = id;
+        }
+
+    protected:
+
+        index_type id_;
+    };
+
+
+
+    /// \brief This class is the same as GenericGraphNode.
+    template<class INDEX_TYPE>
+    class GenericGraphArc
+    {
+    public:
+
+        typedef INDEX_TYPE index_type;
+
+        GenericGraphArc(const lemon::Invalid & iv = lemon::INVALID)
+            : id_(-1)
+        {}
+
+        GenericGraphArc(const index_type id  )
+            : id_(id)
+        {}
+
+        bool operator == (const GenericGraphArc<INDEX_TYPE> & other ) const {
+            return id_ == other.id_;
+        }
+
+        bool operator != (const GenericGraphArc<INDEX_TYPE> & other ) const {
+            return id_ != other.id_;
+        }
+
+        bool operator < (const GenericGraphArc<INDEX_TYPE> & other ) const {
+            return id_ < other.id_;
+        }
+
+        bool operator > (const GenericGraphArc<INDEX_TYPE> & other ) const {
+            return id_ > other.id_;
+        }
+
+        index_type id() const {
+            return id_;
+        }
+
+        void set_id(index_type const & id) {
+            id_ = id;
+        }
+
+    protected:
+
+        index_type id_;
+    };
+
 }
 
 
@@ -95,12 +210,10 @@ class DAGraph0
 public:
 
     typedef Int64 index_type;
-    typedef detail::GenericNode<index_type> Node;
-
-    /// \todo The edgeId of GenericArc is not used. Maybe use another type.
-    typedef detail::GenericArc<index_type> Arc;
-
-    typedef detail::NodeIt<DAGraph0> NodeIt;
+    typedef detail::GenericGraphNode<index_type> Node;
+    typedef detail::GenericGraphArc<index_type> Arc;
+    typedef detail::ItemIt<DAGraph0, Node> NodeIt;
+    typedef detail::ItemIt<DAGraph0, Arc> ArcIt;
 
 protected:
 
@@ -143,15 +256,21 @@ public:
 
     int maxArcId() const;
 
-    Node source(Arc const & a) const;
+    Node source(Arc const & arc) const;
 
-    Node target(Arc const & a) const;
+    Node target(Arc const & arc) const;
 
+    /// \todo Is this function necessary?
     Node firstNode() const;
+
+    void first(Node & node) const;
 
     Node next(Node const & node) const;
 
+    /// \todo Is this function necessary?
     Arc firstArc() const;
+
+    void first(Arc & arc) const;
 
     Arc next(Arc const & arc) const;
 
@@ -192,20 +311,26 @@ inline int DAGraph0::maxArcId() const
 }
 
 inline DAGraph0::Node DAGraph0::source(
-        const Arc & a
+        const Arc & arc
 ) const {
-    return Node(arcs_[a.id()].source);
+    return Node(arcs_[arc.id()].source);
 }
 
 inline DAGraph0::Node DAGraph0::target(
-        const Arc & a
+        const Arc & arc
 ) const {
-    return Node(arcs_[a.id()].target);
+    return Node(arcs_[arc.id()].target);
 }
 
 inline DAGraph0::Node DAGraph0::firstNode() const
 {
     return Node(first_node_);
+}
+
+inline void DAGraph0::first(
+        Node & node
+) const {
+    node.set_id(first_node_);
 }
 
 inline DAGraph0::Node DAGraph0::next(
@@ -216,14 +341,22 @@ inline DAGraph0::Node DAGraph0::next(
 
 inline DAGraph0::Arc DAGraph0::firstArc() const
 {
+    Arc arc;
+    first(arc);
+    return arc;
+}
+
+inline void DAGraph0::first(
+        Arc & arc
+) const {
     int n;
     for (n = first_node_;
          n != -1 && nodes_[n].first_out == -1;
          n = nodes_[n].next) {}
     if (n == -1)
-        return Arc(lemon::Invalid());
+        arc.set_id(-1);
     else
-        return Arc(nodes_[n].first_out);
+        arc.set_id(nodes_[n].first_out);
 }
 
 inline DAGraph0::Arc DAGraph0::next(
