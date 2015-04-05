@@ -3,12 +3,407 @@
 
 #include <vector>
 #include <utility>
-#include <cassert>
+#include <set> /// \note Needed for graph_item_impl.hxx.
 
 #include <vigra/graphs.hxx>
+#include <vigra/graph_item_impl.hxx>
 
 namespace vigra
 {
+
+
+
+namespace detail
+{
+    template <typename GRAPH>
+    class NodeIt
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+
+        NodeIt(Graph const & graph);
+
+        NodeIt(Graph const & graph, Node const & node);
+
+        NodeIt & operator++();
+
+        Node & operator*();
+
+        bool valid() const;
+
+    protected:
+
+        Graph const & graph_;
+        Node current_;
+
+    };
+
+    template <typename GRAPH>
+    NodeIt<GRAPH>::NodeIt(
+            const Graph & graph
+    )   : graph_(graph),
+          current_(graph.firstNode())
+    {}
+
+    template <typename GRAPH>
+    NodeIt<GRAPH>::NodeIt(
+            Graph const & graph,
+            Node const & node
+    )   : graph_(graph),
+          current_(node)
+    {}
+
+    template <typename GRAPH>
+    NodeIt<GRAPH> & NodeIt<GRAPH>::operator++()
+    {
+        current_ = graph_.next(current_);
+        return *this;
+    }
+
+    template <typename GRAPH>
+    typename NodeIt<GRAPH>::Node & NodeIt<GRAPH>::operator*()
+    {
+        return current_;
+    }
+
+    template <typename GRAPH>
+    bool NodeIt<GRAPH>::valid() const
+    {
+        return current_ != lemon::INVALID;
+    }
+
+    template <typename GRAPH>
+    bool operator!=(NodeIt<GRAPH> const & it, lemon::Invalid)
+    {
+        return it.valid();
+    }
+
+    template <typename GRAPH>
+    bool operator!=(lemon::Invalid, NodeIt<GRAPH> const & it)
+    {
+        return it.valid();
+    }
+}
+
+
+
+class DAGraph0
+{
+
+public:
+
+    typedef Int64 index_type;
+    typedef detail::GenericNode<index_type> Node;
+
+    /// \todo The edgeId of GenericArc is not used. Maybe use another type.
+    typedef detail::GenericArc<index_type> Arc;
+
+    typedef detail::NodeIt<DAGraph0> NodeIt;
+
+protected:
+
+    struct NodeT
+    {
+        int prev;
+        int next;
+        int first_in;
+        int first_out;
+    };
+
+    struct ArcT
+    {
+        int source;
+        int target;
+        int prev_in;
+        int next_in;
+        int prev_out;
+        int next_out;
+    };
+
+    std::vector<NodeT> nodes_;
+    std::vector<ArcT> arcs_;
+    int first_node_;
+    int first_free_node_;
+    int first_free_arc_;
+
+public:
+
+    DAGraph0();
+
+    /// \todo Which of the following are really needed? Are there problems with the defaults? Is inline necessary?
+    DAGraph0(DAGraph0 const &) = default;
+    DAGraph0(DAGraph0 &&) = default;
+    ~DAGraph0() = default;
+    DAGraph0 & operator=(DAGraph0 const &) = default;
+    DAGraph0 & operator=(DAGraph0 &&) = default;
+
+    int maxNodeId() const;
+
+    int maxArcId() const;
+
+    Node source(Arc const & a) const;
+
+    Node target(Arc const & a) const;
+
+    Node firstNode() const;
+
+    Node next(Node const & node) const;
+
+    Arc firstArc() const;
+
+    Arc next(Arc const & arc) const;
+
+    Arc firstOut(Node const & node) const;
+
+    Arc nextOut(Arc const & arc) const;
+
+    Arc firstIn(Node const & node) const;
+
+    Arc nextIn(Arc const & arc) const;
+
+    static Node nodeFromId(int id);
+
+    static Arc arcFromId(int id);
+
+    bool valid(Node const & n) const;
+
+    bool valid(Arc const & a) const;
+
+    Node addNode();
+
+    Arc addArc(Node const & u, Node const & v);
+
+    void erase(Node const & node);
+
+    void erase(Arc const & arc);
+
+};
+
+inline int DAGraph0::maxNodeId() const
+{
+    return static_cast<int>(nodes_.size())-1;
+}
+
+inline int DAGraph0::maxArcId() const
+{
+    return static_cast<int>(arcs_.size())-1;
+}
+
+inline DAGraph0::Node DAGraph0::source(
+        const Arc & a
+) const {
+    return Node(arcs_[a.id()].source);
+}
+
+inline DAGraph0::Node DAGraph0::target(
+        const Arc & a
+) const {
+    return Node(arcs_[a.id()].target);
+}
+
+inline DAGraph0::Node DAGraph0::firstNode() const
+{
+    return Node(first_node_);
+}
+
+inline DAGraph0::Node DAGraph0::next(
+        Node const & node
+) const {
+    return Node(nodes_[node.id()].next);
+}
+
+inline DAGraph0::Arc DAGraph0::firstArc() const
+{
+    int n;
+    for (n = first_node_;
+         n != -1 && nodes_[n].first_out == -1;
+         n = nodes_[n].next) {}
+    if (n == -1)
+        return Arc(lemon::Invalid());
+    else
+        return Arc(nodes_[n].first_out);
+}
+
+inline DAGraph0::Arc DAGraph0::next(
+        Arc const & arc
+) const {
+    if (arcs_[arc.id()].next_out != -1)
+    {
+        return Arc(arcs_[arc.id()].next_out);
+    }
+    else
+    {
+        int n;
+        for (n = nodes_[arcs_[arc.id()].source].next;
+             n != -1 && nodes_[n].first_out == -1;
+             n = nodes_[n].next) {}
+        if (n == -1)
+            return Arc(lemon::Invalid());
+        else
+            return Arc(nodes_[n].first_out);
+    }
+}
+
+inline DAGraph0::Arc DAGraph0::firstOut(
+        Node const & node
+) const {
+    return Arc(nodes_[node.id()].first_out);
+}
+
+inline DAGraph0::Arc DAGraph0::nextOut(
+        Arc const & arc
+) const {
+    return Arc(arcs_[arc.id()].next_out);
+}
+
+inline DAGraph0::Arc DAGraph0::firstIn(
+        Node const & node
+) const {
+    return Arc(nodes_[node.id()].first_in);
+}
+
+inline DAGraph0::Arc DAGraph0::nextIn(
+        Arc const & arc
+) const {
+    return Arc(arcs_[arc.id()].next_in);
+}
+
+inline DAGraph0::DAGraph0()
+    : nodes_(),
+      arcs_(),
+      first_node_(-1),
+      first_free_node_(-1),
+      first_free_arc_(-1)
+{}
+
+inline DAGraph0::Node DAGraph0::nodeFromId(
+        int id
+){
+    return Node(id);
+}
+
+inline DAGraph0::Arc DAGraph0::arcFromId(
+        int id
+){
+    return Arc(id);
+}
+
+inline bool DAGraph0::valid(
+        Node const & n
+) const {
+    return n.id() >= 0 && n.id() < static_cast<int>(nodes_.size()) && nodes_[n.id()].prev != -2;
+}
+
+inline bool DAGraph0::valid(
+        Arc const & a
+) const {
+    return a.id() >= 0 && a.id() < static_cast<int>(arcs_.size()) && arcs_[a.id()].prev_in != -2;
+}
+
+inline DAGraph0::Node DAGraph0::addNode()
+{
+    int n;
+
+    if (first_free_node_ == -1)
+    {
+        n = nodes_.size();
+        nodes_.push_back(NodeT());
+    }
+    else
+    {
+        n = first_free_node_;
+        first_free_node_ = nodes_[n].next;
+    }
+
+    nodes_[n].next = first_node_;
+    if (first_node_ != -1)
+        nodes_[first_node_].prev = n;
+    first_node_ = n;
+    nodes_[n].prev = -1;
+    nodes_[n].first_in = -1;
+    nodes_[n].first_out = -1;
+
+    return Node(n);
+}
+
+inline DAGraph0::Arc DAGraph0::addArc(
+        Node const & u,
+        Node const & v
+){
+    int a;
+
+    if (first_free_arc_ == -1)
+    {
+        a = arcs_.size();
+        arcs_.push_back(ArcT());
+    }
+    else
+    {
+        a = first_free_arc_;
+        first_free_arc_ = arcs_[a].next_in;
+    }
+
+    arcs_[a].source = u.id();
+    arcs_[a].target = v.id();
+
+    arcs_[a].next_out = nodes_[u.id()].first_out;
+    if (nodes_[u.id()].first_out != -1)
+        arcs_[nodes_[u.id()].first_out].prev_out = a;
+
+    arcs_[a].next_in = nodes_[v.id()].first_in;
+    if (nodes_[v.id()].first_in != -1)
+        arcs_[nodes_[v.id()].first_in].prev_in = a;
+
+    arcs_[a].prev_in = arcs_[a].prev_out = -1;
+    nodes_[u.id()].first_out = nodes_[v.id()].first_in = a;
+    return Arc(a);
+}
+
+inline void DAGraph0::erase(
+        Node const & node
+){
+    int n = node.id();
+
+    if (nodes_[n].next != -1)
+        nodes_[nodes_[n].next].prev = nodes_[n].prev;
+
+    if (nodes_[n].prev != -1)
+        nodes_[nodes_[n].prev].next = nodes_[n].next;
+    else
+        first_node_ = nodes_[n].next;
+
+    nodes_[n].next = first_free_node_;
+    first_free_node_ = n;
+    nodes_[n].prev = -2;
+}
+
+inline void DAGraph0::erase(
+        Arc const & arc
+){
+    int a = arc.id();
+
+    if (arcs_[a].next_in != -1)
+        arcs_[arcs_[a].next_in].prev_in = arcs_[a].prev_in;
+
+    if (arcs_[a].prev_in != -1)
+        arcs_[arcs_[a].prev_in].next_in = arcs_[a].next_in;
+    else
+        nodes_[arcs_[a].target].first_in = arcs_[a].next_in;
+
+    if (arcs_[a].next_out != -1)
+        arcs_[arcs_[a].next_out].prev_out = arcs_[a].prev_out;
+
+    if (arcs_[a].prev_out != -1)
+        arcs_[arcs_[a].prev_out].next_out = arcs_[a].next_out;
+    else
+        nodes_[arcs_[a].source].first_out = arcs_[a].next_out;
+
+    arcs_[a].next_in = first_free_arc_;
+    first_free_arc_ = a;
+    arcs_[a].prev_in = -2;
+}
 
 
 
@@ -389,7 +784,7 @@ StaticDAGraph0 StaticDAGraph0::build(
         else
         {
             ArcT & outarc = g.arcs_[u.first_out];
-            assert(outarc.prev_out == -1);
+            vigra_assert(outarc.prev_out == -1, "The first arc must not have a predecessor.");
             outarc.prev_out = arcid;
             arc.next_out = u.first_out;
         }
@@ -402,7 +797,7 @@ StaticDAGraph0 StaticDAGraph0::build(
         else
         {
             ArcT & inarc = g.arcs_[v.first_in];
-            assert(inarc.prev_in == -1);
+            vigra_assert(inarc.prev_in == -1, "The first arc must not have a precedessor.");
             inarc.prev_in = arcid;
             arc.next_in = v.first_in;
         }

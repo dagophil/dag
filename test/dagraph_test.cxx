@@ -3,7 +3,35 @@
 #include <vector>
 #include <utility>
 
-void test_graph()
+
+
+void test_dagraph0()
+{
+    using namespace vigra;
+
+    typedef DAGraph0 Graph;
+    typedef Graph::Node Node;
+    typedef Graph::Arc Arc;
+    typedef Graph::NodeIt NodeIt;
+
+    Graph g;
+    Node a = g.addNode();
+    Node b = g.addNode();
+    Node c = g.addNode();
+    Node d = g.addNode();
+
+    Arc e0 = g.addArc(a, b);
+    Arc e1 = g.addArc(b, c);
+    Arc e2 = g.addArc(b, d);
+
+    for (NodeIt it(g); it != lemon::INVALID; ++it)
+    {
+        std::cout << (*it).id() << std::endl;
+    }
+    std::cout << "done" << std::endl;
+}
+
+void test_staticdagraph0()
 {
     std::vector<std::pair<int, int> > arcs {
         {0, 3},
@@ -32,7 +60,7 @@ void test_graph()
     }
 }
 
-void test_tree()
+void test_staticforest0()
 {
     std::vector<std::pair<int, int> > arcs {
         {0, 3},
@@ -67,6 +95,7 @@ void test_tree()
 
 int main()
 {
-    //test_graph();
-    test_tree();
+    test_dagraph0();
+    //test_staticdagraph0();
+    //test_staticforest0();
 }
