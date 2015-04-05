@@ -156,6 +156,7 @@ namespace detail
 
 
     /// \brief This class is the same as GenericGraphNode.
+    /// \todo Is it possible to remove the duplicated code, for example with inheritance?
     template<class INDEX_TYPE>
     class GenericGraphArc
     {
