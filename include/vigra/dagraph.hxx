@@ -9,11 +9,11 @@
 namespace vigra
 {
 
-
-
 namespace detail
 {
 
+    /// \brief Iterator for graph items (e. g. node or arc). The class GRAPH must implement the methods void first(ITEM &) and void next(ITEM &).
+    /// \example An iterator for nodes can be obtained using ItemIt<Graph, Graph::Node>.
     template <typename GRAPH, typename ITEM>
     class ItemIt
     {
@@ -31,6 +31,10 @@ namespace detail
         Item & operator*();
 
         Item* operator->();
+
+        bool operator==(ItemIt const & other);
+
+        bool operator!=(ItemIt const & other);
 
         bool valid() const;
 
@@ -74,6 +78,18 @@ namespace detail
     typename ItemIt<GRAPH, ITEM>::Item* ItemIt<GRAPH, ITEM>::operator->()
     {
         return &current_;
+    }
+
+    template <typename GRAPH, typename ITEM>
+    bool ItemIt<GRAPH, ITEM>::operator==(ItemIt const & other)
+    {
+        return current_ == other.current_;
+    }
+
+    template <typename GRAPH, typename ITEM>
+    bool ItemIt<GRAPH, ITEM>::operator!=(ItemIt const & other)
+    {
+        return current_ != other.current_;
     }
 
     template <typename GRAPH, typename ITEM>
@@ -152,7 +168,8 @@ namespace detail
 
         index_type id_;
     };
-}
+
+} // namespace detail
 
 
 
@@ -473,7 +490,6 @@ inline void DAGraph0::erase(
     first_free_arc_ = a;
     arcs_[a].prev_in = -2;
 }
-
 
 
 
