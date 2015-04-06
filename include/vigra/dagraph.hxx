@@ -108,35 +108,35 @@ namespace detail
 
 
 
-    /// \brief The GenericGraphNode class is just like GenericNode<INDEX_TYPE> in vigra/graph_item_impl.hxx, but with a setter for the id field.
-    template<typename INDEX_TYPE>
-    class GenericGraphNode
+    /// \brief Wrapper class for int, CLASS_ID can be used to create multiple classes that share the same code.
+    template<typename INDEX_TYPE, int CLASS_ID>
+    class GenericGraphItem
     {
     public:
 
         typedef INDEX_TYPE index_type;
 
-        GenericGraphNode(const lemon::Invalid & iv = lemon::INVALID)
+        GenericGraphItem(const lemon::Invalid & iv = lemon::INVALID)
             : id_(-1)
         {}
 
-        GenericGraphNode(const index_type id  )
+        GenericGraphItem(const index_type id  )
             : id_(id)
         {}
 
-        bool operator == (const GenericGraphNode<INDEX_TYPE> & other ) const {
+        bool operator == (const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other ) const {
             return id_ == other.id_;
         }
 
-        bool operator != (const GenericGraphNode<INDEX_TYPE> & other ) const {
+        bool operator != (const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other ) const {
             return id_ != other.id_;
         }
 
-        bool operator < (const GenericGraphNode<INDEX_TYPE> & other ) const {
+        bool operator < (const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other ) const {
             return id_ < other.id_;
         }
 
-        bool operator > (const GenericGraphNode<INDEX_TYPE> & other ) const {
+        bool operator > (const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other ) const {
             return id_ > other.id_;
         }
 
@@ -152,55 +152,6 @@ namespace detail
 
         index_type id_;
     };
-
-
-
-    /// \brief This class is the same as GenericGraphNode.
-    /// \todo Is it possible to remove the duplicated code, for example with inheritance? Or maybe template<typename INDEX_TYPE, int CLASSID> GenericGraphItem and use CLASSID to differ between Node and Arc.
-    template<typename INDEX_TYPE>
-    class GenericGraphArc
-    {
-    public:
-
-        typedef INDEX_TYPE index_type;
-
-        GenericGraphArc(const lemon::Invalid & iv = lemon::INVALID)
-            : id_(-1)
-        {}
-
-        GenericGraphArc(const index_type id  )
-            : id_(id)
-        {}
-
-        bool operator == (const GenericGraphArc<INDEX_TYPE> & other ) const {
-            return id_ == other.id_;
-        }
-
-        bool operator != (const GenericGraphArc<INDEX_TYPE> & other ) const {
-            return id_ != other.id_;
-        }
-
-        bool operator < (const GenericGraphArc<INDEX_TYPE> & other ) const {
-            return id_ < other.id_;
-        }
-
-        bool operator > (const GenericGraphArc<INDEX_TYPE> & other ) const {
-            return id_ > other.id_;
-        }
-
-        index_type id() const {
-            return id_;
-        }
-
-        void set_id(index_type const & id) {
-            id_ = id;
-        }
-
-    protected:
-
-        index_type id_;
-    };
-
 }
 
 
@@ -211,8 +162,8 @@ class DAGraph0
 public:
 
     typedef Int64 index_type;
-    typedef detail::GenericGraphNode<index_type> Node;
-    typedef detail::GenericGraphArc<index_type> Arc;
+    typedef detail::GenericGraphItem<index_type, 0> Node;
+    typedef detail::GenericGraphItem<index_type, 1> Arc;
     typedef detail::ItemIt<DAGraph0, Node> NodeIt;
     typedef detail::ItemIt<DAGraph0, Arc> ArcIt;
 
@@ -525,6 +476,12 @@ inline void DAGraph0::erase(
 
 
 
+
+/*
+ * =====================================
+ * ===               OLD             ===
+ * =====================================
+ * */
 /// \brief Base class for a static directed acyclic graph (static: no nodes or edges can be added/removed).
 class StaticDAGraph0
 {
