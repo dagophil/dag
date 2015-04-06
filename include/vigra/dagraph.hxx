@@ -60,7 +60,7 @@ namespace detail
     template <typename GRAPH, typename ITEM>
     ItemIt<GRAPH, ITEM> & ItemIt<GRAPH, ITEM>::operator++()
     {
-        current_ = graph_.next(current_);
+        graph_.next(current_);
         return *this;
     }
 
@@ -109,7 +109,7 @@ namespace detail
 
 
     /// \brief The GenericGraphNode class is just like GenericNode<INDEX_TYPE> in vigra/graph_item_impl.hxx, but with a setter for the id field.
-    template<class INDEX_TYPE>
+    template<typename INDEX_TYPE>
     class GenericGraphNode
     {
     public:
@@ -156,8 +156,8 @@ namespace detail
 
 
     /// \brief This class is the same as GenericGraphNode.
-    /// \todo Is it possible to remove the duplicated code, for example with inheritance?
-    template<class INDEX_TYPE>
+    /// \todo Is it possible to remove the duplicated code, for example with inheritance? Or maybe template<typename INDEX_TYPE, int CLASSID> GenericGraphItem and use CLASSID to differ between Node and Arc.
+    template<typename INDEX_TYPE>
     class GenericGraphArc
     {
     public:
@@ -261,27 +261,21 @@ public:
 
     Node target(Arc const & arc) const;
 
-    /// \todo Is this function necessary?
-    Node firstNode() const;
-
     void first(Node & node) const;
 
-    Node next(Node const & node) const;
-
-    /// \todo Is this function necessary?
-    Arc firstArc() const;
+    void next(Node & node) const;
 
     void first(Arc & arc) const;
 
-    Arc next(Arc const & arc) const;
+    void next(Arc & arc) const;
 
-    Arc firstOut(Node const & node) const;
+    void firstOut(Arc & arc, Node const & node) const;
 
-    Arc nextOut(Arc const & arc) const;
+    void nextOut(Arc & arc) const;
 
-    Arc firstIn(Node const & node) const;
+    void firstIn(Arc & arc, Node const & node) const;
 
-    Arc nextIn(Arc const & arc) const;
+    void nextIn(Arc & arc) const;
 
     static Node nodeFromId(int id);
 
@@ -323,28 +317,16 @@ inline DAGraph0::Node DAGraph0::target(
     return Node(arcs_[arc.id()].target);
 }
 
-inline DAGraph0::Node DAGraph0::firstNode() const
-{
-    return Node(first_node_);
-}
-
 inline void DAGraph0::first(
         Node & node
 ) const {
     node.set_id(first_node_);
 }
 
-inline DAGraph0::Node DAGraph0::next(
-        Node const & node
+inline void DAGraph0::next(
+        Node & node
 ) const {
-    return Node(nodes_[node.id()].next);
-}
-
-inline DAGraph0::Arc DAGraph0::firstArc() const
-{
-    Arc arc;
-    first(arc);
-    return arc;
+    node.set_id(nodes_[node.id()].next);
 }
 
 inline void DAGraph0::first(
@@ -360,12 +342,12 @@ inline void DAGraph0::first(
         arc.set_id(nodes_[n].first_out);
 }
 
-inline DAGraph0::Arc DAGraph0::next(
-        Arc const & arc
+inline void DAGraph0::next(
+        Arc & arc
 ) const {
     if (arcs_[arc.id()].next_out != -1)
     {
-        return Arc(arcs_[arc.id()].next_out);
+        arc.set_id(arcs_[arc.id()].next_out);
     }
     else
     {
@@ -374,34 +356,36 @@ inline DAGraph0::Arc DAGraph0::next(
              n != -1 && nodes_[n].first_out == -1;
              n = nodes_[n].next) {}
         if (n == -1)
-            return Arc(lemon::Invalid());
+            arc.set_id(-1);
         else
-            return Arc(nodes_[n].first_out);
+            arc.set_id(nodes_[n].first_out);
     }
 }
 
-inline DAGraph0::Arc DAGraph0::firstOut(
+inline void DAGraph0::firstOut(
+        Arc & arc,
         Node const & node
 ) const {
-    return Arc(nodes_[node.id()].first_out);
+    arc.set_id(nodes_[node.id()].first_out);
 }
 
-inline DAGraph0::Arc DAGraph0::nextOut(
-        Arc const & arc
+inline void DAGraph0::nextOut(
+        Arc & arc
 ) const {
-    return Arc(arcs_[arc.id()].next_out);
+    arc.set_id(arcs_[arc.id()].next_out);
 }
 
-inline DAGraph0::Arc DAGraph0::firstIn(
+inline void DAGraph0::firstIn(
+        Arc & arc,
         Node const & node
 ) const {
-    return Arc(nodes_[node.id()].first_in);
+    arc.set_id(nodes_[node.id()].first_in);
 }
 
-inline DAGraph0::Arc DAGraph0::nextIn(
-        Arc const & arc
+inline void DAGraph0::nextIn(
+        Arc & arc
 ) const {
-    return Arc(arcs_[arc.id()].next_in);
+    arc.set_id(arcs_[arc.id()].next_in);
 }
 
 inline DAGraph0::DAGraph0()
