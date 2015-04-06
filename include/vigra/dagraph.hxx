@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <utility>
-
 #include <vigra/graphs.hxx>
 
 namespace vigra
@@ -12,48 +11,7 @@ namespace vigra
 namespace detail
 {
 
-    /// \brief Iterator for graph items (e. g. node or arc). The class GRAPH must implement the methods void first(ITEM &) and void next(ITEM &).
-    /// \note Like in lemon, the iterator is a subclass of ITEM, so it can be used without dereferencing.
-    /// \example An iterator for nodes can be obtained using ItemIt<Graph, Graph::Node>.
-    template <typename GRAPH, typename ITEM>
-    class ItemIt : public ITEM
-    {
-    public:
-
-        typedef GRAPH Graph;
-        typedef ITEM Item;
-
-        ItemIt(Graph const & graph)
-            : graph_(&graph)
-        {
-            graph_->first(*this);
-        }
-
-        ItemIt(Graph const & graph,
-               Item const & item
-        )   : ITEM(item),
-              graph_(&graph)
-        {}
-
-        ItemIt(lemon::Invalid)
-            : ITEM(lemon::INVALID),
-              graph_(nullptr)
-        {}
-
-        ItemIt & operator++()
-        {
-            graph_->next(*this);
-            return *this;
-        }
-
-    protected:
-
-        Graph const * graph_;
-    };
-
-
-
-    /// \brief Wrapper class for int. CLASS_ID can be used to create multiple classes that share the same code.
+    /// \brief Wrapper class for int. CLASS_ID can be used to create multiple classes that share the same code, but are seen as distinct classes by the compiler.
     template<typename INDEX_TYPE, int CLASS_ID>
     class GenericGraphItem
     {
@@ -111,6 +69,190 @@ namespace detail
         return os << item.id();
     }
 
+
+
+    /// \brief Iterator for graph items (e. g. node, arc, leaf nodes, ...).
+    /// \note Like in lemon, the iterator is a subclass of ITEM, so it can be used without dereferencing.
+    template <typename GRAPH, typename ITEM, typename FUNCTOR>
+    class ItemIt : public ITEM
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef ITEM Item;
+        typedef FUNCTOR Functor;
+
+        ItemIt(Graph const & graph)
+            : ITEM(),
+              functor_(graph)
+        {
+            functor_.first(static_cast<Item &>(*this));
+        }
+
+        ItemIt(lemon::Invalid)
+            : ITEM(lemon::INVALID),
+              functor_(nullptr)
+        {}
+
+        ItemIt & operator++()
+        {
+            functor_.next(static_cast<Item &>(*this));
+            return *this;
+        }
+
+    protected:
+
+        Functor functor_;
+    };
+
+    /// \brief Functor for ItemIt to iterate over the nodes of a graph.
+    template <typename GRAPH>
+    struct NodeItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+
+        NodeItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        NodeItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node & node)
+        {
+            graph_->first(node);
+        }
+
+        void next(Node & node)
+        {
+            graph_->next(node);
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
+    /// \brief Functor for ItemIt to iterate over the arcs of a graph.
+    template <typename GRAPH>
+    struct ArcItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Arc Arc;
+
+        ArcItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        ArcItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Arc & arc)
+        {
+            graph_->first(arc);
+        }
+
+        void next(Arc & arc)
+        {
+            graph_->next(arc);
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
+    /// \brief Functor for ItemIt to iterate over the root nodes of a graph.
+    template <typename GRAPH>
+    struct RootNodeItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::const_node_iterator const_iterator;
+
+        RootNodeItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        RootNodeItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node & node)
+        {
+            it_ = graph_->roots_cbegin();
+            if (it_ != graph_->roots_cend())
+                node.set_id(it_->id());
+            else
+                node.set_id(-1);
+        }
+
+        void next(Node & node)
+        {
+            ++it_;
+            if (it_ != graph_->roots_cend())
+                node.set_id(it_->id());
+            else
+                node.set_id(-1);
+        }
+
+    protected:
+
+        Graph const * graph_;
+        const_iterator it_;
+    };
+
+    /// \brief Functor for ItemIt to iterate over the leaf nodes of a graph.
+    template <typename GRAPH>
+    struct LeafNodeItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::const_node_iterator const_iterator;
+
+        LeafNodeItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        LeafNodeItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node & node)
+        {
+            it_ = graph_->leaves_cbegin();
+            if (it_ != graph_->leaves_cend())
+                node.set_id(it_->id());
+            else
+                node.set_id(-1);
+        }
+
+        void next(Node & node)
+        {
+            ++it_;
+            if (it_ != graph_->leaves_cend())
+                node.set_id(it_->id());
+            else
+                node.set_id(-1);
+        }
+
+    protected:
+
+        Graph const * graph_;
+        const_iterator it_;
+    };
+
 } // namespace detail
 
 
@@ -125,40 +267,12 @@ public:
     typedef Int64 index_type;
     typedef detail::GenericGraphItem<index_type, 0> Node;
     typedef detail::GenericGraphItem<index_type, 1> Arc;
-    typedef detail::ItemIt<DAGraph0, Node> NodeIt;
-    typedef detail::ItemIt<DAGraph0, Arc> ArcIt;
-
-protected:
-
-    struct NodeT
-    {
-        int prev;
-        int next;
-        int first_in;
-        int first_out;
-    };
-
-    struct ArcT
-    {
-        int source;
-        int target;
-        int prev_in;
-        int next_in;
-        int prev_out;
-        int next_out;
-    };
-
-    std::vector<NodeT> nodes_;
-    std::vector<ArcT> arcs_;
-    int first_node_;
-    int first_free_node_;
-    int first_free_arc_;
-
-public:
+    typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
+    typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
 
     DAGraph0();
 
-    /// \todo Which of the following are really needed? Are there problems with the defaults? Is inline necessary?
+    /// \todo Which of the following are really needed? Are there problems with the defaults?
     DAGraph0(DAGraph0 const &) = default;
     DAGraph0(DAGraph0 &&) = default;
     ~DAGraph0() = default;
@@ -209,7 +323,41 @@ public:
 
     void erase(Arc const & arc);
 
+protected:
+
+    struct NodeT
+    {
+        int prev;
+        int next;
+        int first_in;
+        int first_out;
+    };
+
+    struct ArcT
+    {
+        int source;
+        int target;
+        int prev_in;
+        int next_in;
+        int prev_out;
+        int next_out;
+    };
+
+    std::vector<NodeT> nodes_;
+    std::vector<ArcT> arcs_;
+    int first_node_;
+    int first_free_node_;
+    int first_free_arc_;
+
 };
+
+inline DAGraph0::DAGraph0()
+    : nodes_(),
+      arcs_(),
+      first_node_(-1),
+      first_free_node_(-1),
+      first_free_arc_(-1)
+{}
 
 inline int DAGraph0::maxNodeId() const
 {
@@ -303,14 +451,6 @@ inline void DAGraph0::nextIn(
 ) const {
     arc.set_id(arcs_[arc.id()].next_in);
 }
-
-inline DAGraph0::DAGraph0()
-    : nodes_(),
-      arcs_(),
-      first_node_(-1),
-      first_free_node_(-1),
-      first_free_arc_(-1)
-{}
 
 inline int DAGraph0::id(
         const Node & node
@@ -473,17 +613,78 @@ inline void DAGraph0::erase(
 
 class FixedForest0 : public DAGraph0
 {
+private:
+
+    typedef DAGraph0 Parent;
 
 public:
 
-    FixedForest0(){}
+    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> > RootNodeIt;
+    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> > LeafNodeIt;
+    typedef std::vector<Node>::const_iterator const_node_iterator;
 
-private:
+    /// \brief Create the forest from a given graph.
+    FixedForest0(DAGraph0 const & graph);
 
-    using DAGraph0::addNode;
-    using DAGraph0::addArc;
+    const_node_iterator roots_cbegin() const;
 
+    const_node_iterator roots_cend() const;
+
+    const_node_iterator leaves_cbegin() const;
+
+    const_node_iterator leaves_cend() const;
+
+protected:
+
+    // Hide all functions that modify the graph.
+    using Parent::addNode;
+    using Parent::addArc;
+    using Parent::erase;
+
+    /// \brief This vector contains all root nodes and is always sorted.
+    std::vector<Node> roots_;
+
+    /// \brief This vector contains all leaf nodes and is always sorted.
+    std::vector<Node> leaves_;
 };
+
+FixedForest0::FixedForest0(
+        const DAGraph0 & graph
+)   : Parent(graph)
+{
+    Arc arc;
+    for (NodeIt it(*this); it != lemon::INVALID; ++it)
+    {
+        this->firstIn(arc, it);
+        if (arc == lemon::INVALID)
+            roots_.push_back(it);
+        this->firstOut(arc, it);
+        if (arc == lemon::INVALID)
+            leaves_.push_back(it);
+    }
+    std::sort(roots_.begin(), roots_.end());
+    std::sort(leaves_.begin(), leaves_.end());
+}
+
+FixedForest0::const_node_iterator FixedForest0::roots_cbegin() const
+{
+    return roots_.cbegin();
+}
+
+FixedForest0::const_node_iterator FixedForest0::roots_cend() const
+{
+    return roots_.cend();
+}
+
+FixedForest0::const_node_iterator FixedForest0::leaves_cbegin() const
+{
+    return leaves_.cbegin();
+}
+
+FixedForest0::const_node_iterator FixedForest0::leaves_cend() const
+{
+    return leaves_.cend();
+}
 
 } // namespace vigra
 
