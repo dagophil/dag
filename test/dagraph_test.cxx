@@ -17,13 +17,7 @@ void test_dagraph0()
     typedef Graph::NodeIt NodeIt;
     typedef Graph::ArcIt ArcIt;
 
-    // Create the following graph:
-    //     a
-    //    /
-    //   b
-    //  / \
-    // c   d
-    // (all arcs are directed downwards)
+    // Create the graph.
     Graph g;
     Node a = g.addNode();
     Node b = g.addNode();
@@ -123,13 +117,7 @@ void test_fixedforest0()
     typedef Forest::RootNodeIt RootNodeIt;
     typedef Forest::LeafNodeIt LeafNodeIt;
 
-    // Create the following graph:
-    //      0   1
-    //     / \ /
-    //    2   3
-    //   / \
-    //  4   5
-    // (all arcs are directed downwards)
+    // Create the graph.
     DAGraph0 g;
     std::vector<std::pair<int, int> > arcs {
         {0, 2},

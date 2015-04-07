@@ -641,6 +641,8 @@ protected:
     using Parent::addArc;
     using Parent::erase;
 
+    /// \todo Change vector to set, so nodes can safely be added / removed when a forest is built.
+
     /// \brief This vector contains all root nodes and is always sorted.
     std::vector<Node> roots_;
 
