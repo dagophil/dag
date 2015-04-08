@@ -78,9 +78,9 @@ namespace detail
     {
     public:
 
-        typedef GRAPH Graph;
-        typedef ITEM Item;
-        typedef FUNCTOR Functor;
+        using Graph = GRAPH;
+        using Item = ITEM;
+        using Functor = FUNCTOR;
 
         ItemIt(Graph const & graph)
             : ITEM(),
@@ -111,8 +111,8 @@ namespace detail
     {
     public:
 
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
+        using Graph = GRAPH;
+        using Node = typename Graph::Node;
 
         NodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -143,8 +143,8 @@ namespace detail
     {
     public:
 
-        typedef GRAPH Graph;
-        typedef typename Graph::Arc Arc;
+        using Graph = GRAPH;
+        using Arc = typename Graph::Arc;
 
         ArcItFunctor(Graph const * graph)
             : graph_(graph)
@@ -175,9 +175,9 @@ namespace detail
     {
     public:
 
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        typedef typename Graph::const_node_iterator const_iterator;
+        using Graph = GRAPH;
+        using Node = typename Graph::Node;
+        using const_iterator = typename Graph::const_node_iterator;
 
         RootNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -217,9 +217,9 @@ namespace detail
     {
     public:
 
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        typedef typename Graph::const_node_iterator const_iterator;
+        using Graph = GRAPH;
+        using Node = typename Graph::Node;
+        using const_iterator = typename Graph::const_node_iterator;
 
         LeafNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -264,11 +264,11 @@ class DAGraph0
 
 public:
 
-    typedef Int64 index_type;
-    typedef detail::GenericGraphItem<index_type, 0> Node;
-    typedef detail::GenericGraphItem<index_type, 1> Arc;
-    typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
-    typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
+    using index_type = Int64;
+    using Node = detail::GenericGraphItem<index_type, 0>;
+    using Arc = detail::GenericGraphItem<index_type, 1>;
+    using NodeIt = detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> >;
+    using ArcIt = detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> >;
 
     DAGraph0();
 
@@ -619,9 +619,9 @@ private:
 
 public:
 
-    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> > RootNodeIt;
-    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> > LeafNodeIt;
-    typedef std::vector<Node>::const_iterator const_node_iterator;
+    using RootNodeIt = detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> >;
+    using LeafNodeIt = detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> >;
+    using const_node_iterator = std::vector<Node>::const_iterator;
 
     /// \brief Create the forest from a given graph.
     FixedForest0(DAGraph0 const & graph);
@@ -634,14 +634,15 @@ public:
 
     const_node_iterator leaves_cend() const;
 
+    // Hide all functions that modify the graph.
+    Node addNode() = delete;
+    Arc addArc(Node const & u, Node const & v) = delete;
+    void erase(Node const & node) = delete;
+    void erase(Arc const & arc) = delete;
+
 protected:
 
-    // Hide all functions that modify the graph.
-    using Parent::addNode;
-    using Parent::addArc;
-    using Parent::erase;
-
-    /// \todo Change vector to set, so nodes can safely be added / removed when a forest is built.
+    /// \todo Change vector to map, so nodes can safely be added / removed when a forest is built.
 
     /// \brief This vector contains all root nodes and is always sorted.
     std::vector<Node> roots_;
