@@ -15,5 +15,9 @@ set(CMAKE_CXX_FLAGS "-std=c++11")
 find_package(VIGRA REQUIRED)
 include_directories(${VIGRA_INCLUDE_DIR})
 
+# HDF5
+find_package(HDF5 REQUIRED)
+include_directories(${HDF5_INCLUDE_DIR})
+
 # Add tests
 add_subdirectory(test)

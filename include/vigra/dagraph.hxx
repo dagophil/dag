@@ -78,9 +78,9 @@ namespace detail
     {
     public:
 
-        using Graph = GRAPH;
-        using Item = ITEM;
-        using Functor = FUNCTOR;
+        typedef GRAPH Graph;
+        typedef ITEM Item;
+        typedef FUNCTOR Functor;
 
         ItemIt(Graph const & graph)
             : ITEM(),
@@ -100,6 +100,16 @@ namespace detail
             return *this;
         }
 
+        ItemIt* operator->()
+        {
+            return this;
+        }
+
+        ItemIt & operator*()
+        {
+            return *this;
+        }
+
     protected:
 
         Functor functor_;
@@ -111,8 +121,8 @@ namespace detail
     {
     public:
 
-        using Graph = GRAPH;
-        using Node = typename Graph::Node;
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
 
         NodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -143,8 +153,8 @@ namespace detail
     {
     public:
 
-        using Graph = GRAPH;
-        using Arc = typename Graph::Arc;
+        typedef GRAPH Graph;
+        typedef typename Graph::Arc Arc;
 
         ArcItFunctor(Graph const * graph)
             : graph_(graph)
@@ -175,9 +185,9 @@ namespace detail
     {
     public:
 
-        using Graph = GRAPH;
-        using Node = typename Graph::Node;
-        using const_iterator = typename Graph::const_node_iterator;
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::const_node_iterator const_iterator;
 
         RootNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -193,7 +203,7 @@ namespace detail
             if (it_ != graph_->roots_cend())
                 node.set_id(it_->id());
             else
-                node.set_id(-1);
+                node = lemon::INVALID;
         }
 
         void next(Node & node)
@@ -202,7 +212,7 @@ namespace detail
             if (it_ != graph_->roots_cend())
                 node.set_id(it_->id());
             else
-                node.set_id(-1);
+                node = lemon::INVALID;
         }
 
     protected:
@@ -217,9 +227,9 @@ namespace detail
     {
     public:
 
-        using Graph = GRAPH;
-        using Node = typename Graph::Node;
-        using const_iterator = typename Graph::const_node_iterator;
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::const_node_iterator const_iterator;
 
         LeafNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -235,7 +245,7 @@ namespace detail
             if (it_ != graph_->leaves_cend())
                 node.set_id(it_->id());
             else
-                node.set_id(-1);
+                node = lemon::INVALID;
         }
 
         void next(Node & node)
@@ -244,13 +254,163 @@ namespace detail
             if (it_ != graph_->leaves_cend())
                 node.set_id(it_->id());
             else
-                node.set_id(-1);
+                node = lemon::INVALID;
         }
 
     protected:
 
         Graph const * graph_;
         const_iterator it_;
+    };
+
+    template <typename GRAPH, typename ITEM, typename ITERITEM, typename FUNCTOR>
+    class SubItemIt : public ITERITEM
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef ITEM Item;
+        typedef ITERITEM IterItem;
+        typedef FUNCTOR Functor;
+
+        SubItemIt(Graph const & graph, Item const & item)
+            : ITERITEM(),
+              functor_(graph)
+        {
+            functor_.first(item, static_cast<IterItem &>(*this));
+        }
+
+        SubItemIt(lemon::Invalid)
+            : ITERITEM(lemon::INVALID),
+              functor_(nullptr)
+        {}
+
+        SubItemIt & operator++()
+        {
+            functor_.next(static_cast<IterItem &>(*this));
+            return *this;
+        }
+
+        SubItemIt* operator->()
+        {
+            return this;
+        }
+
+        SubItemIt & operator*()
+        {
+            return *this;
+        }
+
+    protected:
+
+        Functor functor_;
+    };
+
+    /// \brief Functor for SubItemIt to iterate over all outgoing arcs of a node.
+    template <typename GRAPH>
+    struct OutArcItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::Arc Arc;
+
+        OutArcItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        OutArcItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node const & node, Arc & arc)
+        {
+            graph_->firstOut(arc, node);
+        }
+
+        void next(Arc & arc)
+        {
+            graph_->nextOut(arc);
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
+    /// \brief Functor for SubItemIt to iterate over all incoming arcs of a node.
+    template <typename GRAPH>
+    struct InArcItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::Arc Arc;
+
+        InArcItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        InArcItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node const & node, Arc & arc)
+        {
+            graph_->firstIn(arc, node);
+        }
+
+        void next(Arc & arc)
+        {
+            graph_->nextIn(arc);
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
+    template <typename GRAPH>
+    struct ChildItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::Arc Arc;
+
+        ChildItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        ChildItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node const & sourcenode, Node & childnode)
+        {
+            graph_->firstOut(arc_, sourcenode);
+            if (arc_ != lemon::INVALID)
+                childnode = graph_->target(arc_);
+            else
+                childnode = lemon::INVALID;
+        }
+
+        void next(Node & childnode)
+        {
+            graph_->nextOut(arc_);
+            if (arc_ != lemon::INVALID)
+                childnode = graph_->target(arc_);
+            else
+                childnode = lemon::INVALID;
+        }
+
+    protected:
+
+        Graph const * graph_;
+        Arc arc_;
     };
 
 } // namespace detail
@@ -264,11 +424,14 @@ class DAGraph0
 
 public:
 
-    using index_type = Int64;
-    using Node = detail::GenericGraphItem<index_type, 0>;
-    using Arc = detail::GenericGraphItem<index_type, 1>;
-    using NodeIt = detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> >;
-    using ArcIt = detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> >;
+    typedef Int64 index_type;
+    typedef detail::GenericGraphItem<index_type, 0> Node;
+    typedef detail::GenericGraphItem<index_type, 1> Arc;
+    typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
+    typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
+    typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
+    typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
+    typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ChildItFunctor<DAGraph0> > ChildIt;
 
     DAGraph0();
 
@@ -401,7 +564,7 @@ inline void DAGraph0::first(
          n != -1 && nodes_[n].first_out == -1;
          n = nodes_[n].next) {}
     if (n == -1)
-        arc.set_id(-1);
+        arc = lemon::INVALID;
     else
         arc.set_id(nodes_[n].first_out);
 }
@@ -420,7 +583,7 @@ inline void DAGraph0::next(
              n != -1 && nodes_[n].first_out == -1;
              n = nodes_[n].next) {}
         if (n == -1)
-            arc.set_id(-1);
+            arc = lemon::INVALID;
         else
             arc.set_id(nodes_[n].first_out);
     }
@@ -611,6 +774,54 @@ inline void DAGraph0::erase(
 
 
 
+/// \brief The forest class extends a graph by some rootnode and parent functions.
+/// \todo Decide whether to check that the forest constraint "each node has only one parent" is fulfilled.
+/// \todo Maybe replace inheritance by containment.
+/// \todo Maybe use template parameter instead of DAGraph0.
+class Forest0 : public DAGraph0
+{
+public:
+
+    Forest0() = default;
+
+    /// \todo Which of the following are really needed? Are there problems with the defaults?
+    Forest0(Forest0 const &) = default;
+    Forest0(Forest0 &&) = default;
+    ~Forest0() = default;
+    Forest0 & operator=(Forest0 const &) = default;
+    Forest0 & operator=(Forest0 &&) = default;
+
+    bool is_root_node(Node const & node) const;
+
+    void parent(Node & node) const;
+};
+
+bool Forest0::is_root_node(
+        const Node & node
+) const {
+    Arc tmp;
+    firstIn(tmp, node);
+    return tmp == lemon::INVALID;
+}
+
+void Forest0::parent(
+        Node & node
+) const {
+    Arc tmp;
+    firstIn(tmp, node);
+    if (tmp != lemon::INVALID)
+    {
+        node = source(tmp);
+    }
+    else
+    {
+        node = lemon::INVALID;
+    }
+}
+
+
+
+/// \todo Inherit from Forest0 instead of DAGraph0.
 class FixedForest0 : public DAGraph0
 {
 private:
@@ -619,9 +830,9 @@ private:
 
 public:
 
-    using RootNodeIt = detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> >;
-    using LeafNodeIt = detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> >;
-    using const_node_iterator = std::vector<Node>::const_iterator;
+    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> > RootNodeIt;
+    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> > LeafNodeIt;
+    typedef std::vector<Node>::const_iterator const_node_iterator;
 
     /// \brief Create the forest from a given graph.
     FixedForest0(DAGraph0 const & graph);
@@ -635,6 +846,7 @@ public:
     const_node_iterator leaves_cend() const;
 
     // Hide all functions that modify the graph.
+    /// \todo Is this a good practice? I guess the "is-a"-relation of OO-programming is violated.
     Node addNode() = delete;
     Arc addArc(Node const & u, Node const & v) = delete;
     void erase(Node const & node) = delete;
