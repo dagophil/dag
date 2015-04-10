@@ -187,13 +187,69 @@ namespace detail
 
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
-        typedef typename Graph::const_node_iterator const_iterator;
+        typedef typename Graph::Arc Arc;
 
         RootNodeItFunctor(Graph const * graph)
             : graph_(graph)
         {}
 
         RootNodeItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node & node)
+        {
+            graph_->first(node);
+            if (!graph_->valid(node))
+                return;
+            Arc arc;
+            graph_->firstIn(arc, node);
+            while (graph_->valid(arc))
+            {
+                graph_->next(node);
+                if (!graph_->valid(node))
+                    return;
+                graph_->firstIn(arc, node);
+            }
+        }
+
+        void next(Node & node)
+        {
+            graph_->next(node);
+            if (!graph_->valid(node))
+                return;
+            Arc arc;
+            graph_->firstIn(arc, node);
+            while (graph_->valid(arc))
+            {
+                graph_->next(node);
+                if (!graph_->valid(node))
+                    return;
+                graph_->firstIn(arc, node);
+            }
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
+    /// \brief Functor for ItemIt to iterate over the root nodes of a graph
+    /// \note The Graph must implement the roots_cbegin() and roots_cend() methods to return a const_iterator to a vector with the root nodes.
+    template <typename GRAPH>
+    struct RootNodeVectorItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::const_node_iterator const_iterator;
+
+        RootNodeVectorItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        RootNodeVectorItFunctor(Graph const & graph)
             : graph_(&graph)
         {}
 
@@ -428,6 +484,7 @@ public:
     typedef detail::GenericGraphItem<index_type, 0> Node;
     typedef detail::GenericGraphItem<index_type, 1> Arc;
     typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
+    typedef detail::ItemIt<DAGraph0, Node, detail::RootNodeItFunctor<DAGraph0> > RootNodeIt;
     typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
@@ -830,7 +887,7 @@ private:
 
 public:
 
-    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeItFunctor<FixedForest0> > RootNodeIt;
+    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeVectorItFunctor<FixedForest0> > RootNodeIt;
     typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> > LeafNodeIt;
     typedef std::vector<Node>::const_iterator const_node_iterator;
 
