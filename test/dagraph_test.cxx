@@ -231,13 +231,14 @@ void test_fixedforest0()
 {
     using namespace vigra;
 
-    typedef FixedForest0 Forest;
-    typedef Forest::Node Node;
-    typedef Forest::RootNodeIt RootNodeIt;
-    typedef Forest::LeafNodeIt LeafNodeIt;
+    typedef Forest0<DAGraph0> Forest;
+    typedef FixedForest0<Forest> FixedForest;
+    typedef FixedForest::Node Node;
+    typedef FixedForest::RootNodeIt RootNodeIt;
+    typedef FixedForest::LeafNodeIt LeafNodeIt;
 
-    // Create the graph.
-    DAGraph0 g;
+    // Create the forest.
+    Forest g;
     std::vector<std::pair<int, int> > arcs {
         {0, 2},
         {0, 3},
@@ -250,8 +251,8 @@ void test_fixedforest0()
     for (std::pair<int, int> const & a : arcs)
         g.addArc(Node(a.first), Node(a.second));
 
-    // Create a forest from the graph.
-    Forest f(g);
+    // Create a fixed forest.
+    FixedForest f(g);
 
     // Check that the root node iterator walks over all root nodes.
     {

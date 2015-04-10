@@ -941,20 +941,24 @@ void Forest0<GRAPH>::parent(
 
 
 /// \todo Inherit from Forest0 instead of DAGraph0.
-class FixedForest0 : public DAGraph0
+template <typename FOREST>
+class FixedForest0 : public FOREST
 {
 private:
 
-    typedef DAGraph0 Parent;
+    typedef FOREST Parent;
 
 public:
 
+    typedef typename Parent::Node Node;
+    typedef typename Parent::Arc Arc;
+    typedef typename Parent::NodeIt NodeIt;
     typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeVectorItFunctor<FixedForest0> > RootNodeIt;
     typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeVectorItFunctor<FixedForest0> > LeafNodeIt;
-    typedef std::vector<Node>::const_iterator const_node_iterator;
+    typedef typename std::vector<Node>::const_iterator const_node_iterator;
 
     /// \brief Create the forest from a given graph.
-    FixedForest0(DAGraph0 const & graph);
+    FixedForest0(Parent const & graph);
 
     const_node_iterator roots_cbegin() const;
 
@@ -982,40 +986,45 @@ protected:
     std::vector<Node> leaves_;
 };
 
-FixedForest0::FixedForest0(
-        const DAGraph0 & graph
+template <typename FOREST>
+FixedForest0<FOREST>::FixedForest0(
+        const Parent & graph
 )   : Parent(graph)
 {
     Arc arc;
     for (NodeIt it(*this); it != lemon::INVALID; ++it)
     {
         this->firstIn(arc, it);
-        if (arc == lemon::INVALID)
+        if (!this->valid(arc))
             roots_.push_back(it);
         this->firstOut(arc, it);
-        if (arc == lemon::INVALID)
+        if (!this->valid(arc))
             leaves_.push_back(it);
     }
     std::sort(roots_.begin(), roots_.end());
     std::sort(leaves_.begin(), leaves_.end());
 }
 
-FixedForest0::const_node_iterator FixedForest0::roots_cbegin() const
+template <typename FOREST>
+typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::roots_cbegin() const
 {
     return roots_.cbegin();
 }
 
-FixedForest0::const_node_iterator FixedForest0::roots_cend() const
+template <typename FOREST>
+typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::roots_cend() const
 {
     return roots_.cend();
 }
 
-FixedForest0::const_node_iterator FixedForest0::leaves_cbegin() const
+template <typename FOREST>
+typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::leaves_cbegin() const
 {
     return leaves_.cbegin();
 }
 
-FixedForest0::const_node_iterator FixedForest0::leaves_cend() const
+template <typename FOREST>
+typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::leaves_cend() const
 {
     return leaves_.cend();
 }
