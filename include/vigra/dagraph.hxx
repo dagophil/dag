@@ -279,7 +279,7 @@ namespace detail
 
     /// \brief Functor for ItemIt to iterate over the leaf nodes of a graph.
     template <typename GRAPH>
-    struct LeafNodeItFunctor
+    struct LeafNodeVectorItFunctor
     {
     public:
 
@@ -287,11 +287,11 @@ namespace detail
         typedef typename Graph::Node Node;
         typedef typename Graph::const_node_iterator const_iterator;
 
-        LeafNodeItFunctor(Graph const * graph)
+        LeafNodeVectorItFunctor(Graph const * graph)
             : graph_(graph)
         {}
 
-        LeafNodeItFunctor(Graph const & graph)
+        LeafNodeVectorItFunctor(Graph const & graph)
             : graph_(&graph)
         {}
 
@@ -888,7 +888,7 @@ private:
 public:
 
     typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeVectorItFunctor<FixedForest0> > RootNodeIt;
-    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeItFunctor<FixedForest0> > LeafNodeIt;
+    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeVectorItFunctor<FixedForest0> > LeafNodeIt;
     typedef std::vector<Node>::const_iterator const_node_iterator;
 
     /// \brief Create the forest from a given graph.
