@@ -189,7 +189,7 @@ void test_forest0()
 {
     using namespace vigra;
 
-    typedef Forest0 Forest;
+    typedef Forest0<DAGraph0> Forest;
     typedef Forest::Node Node;
     typedef Forest::Arc Arc;
 

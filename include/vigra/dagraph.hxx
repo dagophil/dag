@@ -890,11 +890,14 @@ inline void DAGraph0::erase(
 
 /// \brief The forest class extends a graph by some rootnode and parent functions.
 /// \todo Decide whether to check that the forest constraint "each node has only one parent" is fulfilled.
-/// \todo Maybe replace inheritance by containment.
-/// \todo Maybe use template parameter instead of DAGraph0.
-class Forest0 : public DAGraph0
+template <typename GRAPH>
+class Forest0 : public GRAPH
 {
 public:
+
+    typedef GRAPH Parent;
+    typedef typename Parent::Node Node;
+    typedef typename Parent::Arc Arc;
 
     Forest0() = default;
 
@@ -910,22 +913,24 @@ public:
     void parent(Node & node) const;
 };
 
-bool Forest0::is_root_node(
+template <typename GRAPH>
+bool Forest0<GRAPH>::is_root_node(
         const Node & node
 ) const {
     Arc tmp;
-    firstIn(tmp, node);
+    this->firstIn(tmp, node);
     return tmp == lemon::INVALID;
 }
 
-void Forest0::parent(
+template <typename GRAPH>
+void Forest0<GRAPH>::parent(
         Node & node
 ) const {
-    Arc tmp;
-    firstIn(tmp, node);
-    if (tmp != lemon::INVALID)
+    Arc arc;
+    this->firstIn(arc, node);
+    if (this->valid(arc))
     {
-        node = source(tmp);
+        node = this->source(arc);
     }
     else
     {
