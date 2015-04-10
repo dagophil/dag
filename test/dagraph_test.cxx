@@ -17,6 +17,7 @@ void test_dagraph0()
     typedef Graph::Arc Arc;
     typedef Graph::NodeIt NodeIt;
     typedef Graph::RootNodeIt RootNodeIt;
+    typedef Graph::LeafNodeIt LeafNodeIt;
     typedef Graph::ArcIt ArcIt;
     typedef Graph::OutArcIt OutArcIt;
     typedef Graph::InArcIt InArcIt;
@@ -63,6 +64,19 @@ void test_dagraph0()
         std::vector<Node> nodes {a, e};
         std::vector<Node> iter_nodes;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_nodes.push_back(Node(it));
+        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
+        std::sort(nodes.begin(), nodes.end());
+        std::sort(iter_nodes.begin(), iter_nodes.end());
+        for (size_t i = 0; i < nodes.size(); ++i)
+            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+    }
+
+    // Check that the leaf node iterator walks over all leaf nodes.
+    {
+        std::vector<Node> nodes {c, d};
+        std::vector<Node> iter_nodes;
+        for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
         vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
         std::sort(nodes.begin(), nodes.end());

@@ -234,6 +234,61 @@ namespace detail
         Graph const * graph_;
     };
 
+    /// \brief Functor for ItemIt to iterate over the leaf nodes of a graph.
+    template <typename GRAPH>
+    struct LeafNodeItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::Arc Arc;
+
+        LeafNodeItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        LeafNodeItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node & node)
+        {
+            graph_->first(node);
+            if (!graph_->valid(node))
+                return;
+            Arc arc;
+            graph_->firstOut(arc, node);
+            while (graph_->valid(arc))
+            {
+                graph_->next(node);
+                if (!graph_->valid(node))
+                    return;
+                graph_->firstOut(arc, node);
+            }
+        }
+
+        void next(Node & node)
+        {
+            graph_->next(node);
+            if (!graph_->valid(node))
+                return;
+            Arc arc;
+            graph_->firstOut(arc, node);
+            while (graph_->valid(arc))
+            {
+                graph_->next(node);
+                if (!graph_->valid(node))
+                    return;
+                graph_->firstOut(arc, node);
+            }
+        }
+
+    protected:
+
+        Graph const * graph_;
+    };
+
     /// \brief Functor for ItemIt to iterate over the root nodes of a graph
     /// \note The Graph must implement the roots_cbegin() and roots_cend() methods to return a const_iterator to a vector with the root nodes.
     template <typename GRAPH>
@@ -278,6 +333,7 @@ namespace detail
     };
 
     /// \brief Functor for ItemIt to iterate over the leaf nodes of a graph.
+    /// \note The Graph must implement the leaves_cbegin() and leaves_cend() methods to return a const_iterator to a vector with the leaf nodes.
     template <typename GRAPH>
     struct LeafNodeVectorItFunctor
     {
@@ -485,6 +541,7 @@ public:
     typedef detail::GenericGraphItem<index_type, 1> Arc;
     typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
     typedef detail::ItemIt<DAGraph0, Node, detail::RootNodeItFunctor<DAGraph0> > RootNodeIt;
+    typedef detail::ItemIt<DAGraph0, Node, detail::LeafNodeItFunctor<DAGraph0> > LeafNodeIt;
     typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
