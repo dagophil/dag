@@ -63,7 +63,6 @@ namespace detail
         index_type id_;
     };
 
-    /// \todo Find out whether the use of this function confuses the user. (E. g. if item is an arc, this operator gives the arc id and not source/target node.)
     template <typename INDEX_TYPE, int CLASS_ID>
     std::ostream & operator << (std::ostream & os, GenericGraphItem<INDEX_TYPE, CLASS_ID> const & item)
     {
@@ -890,7 +889,6 @@ inline void DAGraph0::erase(
 
 
 /// \brief The Forest0 class extends a graph by some rootnode and parent functions.
-/// \todo Decide whether to check that the forest constraint "each node has only one parent" is fulfilled.
 template <typename GRAPH>
 class Forest0 : public GRAPH
 {
@@ -972,6 +970,8 @@ public:
     virtual void erase(Node const & node);
 
     virtual void erase(Arc const & arc);
+
+    // TODO: Add iterators for root nodes and leaf nodes.
 
 protected:
 
