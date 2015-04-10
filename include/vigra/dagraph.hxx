@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <utility>
+#include <unordered_set>
 #include <vigra/graphs.hxx>
 
 namespace vigra
@@ -592,13 +593,13 @@ public:
 
     bool valid(Arc const & a) const;
 
-    Node addNode();
+    virtual Node addNode();
 
-    Arc addArc(Node const & u, Node const & v);
+    virtual Arc addArc(Node const & u, Node const & v);
 
-    void erase(Node const & node);
+    virtual void erase(Node const & node);
 
-    void erase(Arc const & arc);
+    virtual void erase(Arc const & arc);
 
 protected:
 
@@ -888,7 +889,7 @@ inline void DAGraph0::erase(
 
 
 
-/// \brief The forest class extends a graph by some rootnode and parent functions.
+/// \brief The Forest0 class extends a graph by some rootnode and parent functions.
 /// \todo Decide whether to check that the forest constraint "each node has only one parent" is fulfilled.
 template <typename GRAPH>
 class Forest0 : public GRAPH
@@ -940,9 +941,83 @@ void Forest0<GRAPH>::parent(
 
 
 
-/// \todo Inherit from Forest0 instead of DAGraph0.
+template <class NODE>
+struct NodeHash
+{
+public:
+    typedef NODE Node;
+    size_t operator()(Node const & node) const
+    {
+        return h_(node.id());
+    }
+protected:
+    std::hash<int> h_;
+};
+
+template <typename GRAPH>
+class Forest1 : public GRAPH
+{
+public:
+
+    typedef GRAPH Parent;
+    typedef typename Parent::Node Node;
+    typedef typename Parent::Arc Arc;
+
+    Forest1() = default;
+
+    virtual Node addNode() override;
+
+    virtual Arc addArc(Node const & u, Node const & v) override;
+
+    virtual void erase(Node const & node);
+
+    virtual void erase(Arc const & arc);
+
+protected:
+
+    /// \brief Unordered set with root nodes.
+    std::unordered_set<Node, NodeHash<Node> > roots_;
+
+    /// \brief Unordered set with leaf nodes.
+    std::unordered_set<Node, NodeHash<Node> > leaves_;
+};
+
+template <typename GRAPH>
+typename Forest1<GRAPH>::Node Forest1<GRAPH>::addNode()
+{
+    // TODO: Implement.
+    vigra_precondition(false, "Forest1::addNode(): Not implemented yet.");
+}
+
+template <typename GRAPH>
+typename Forest1<GRAPH>::Arc Forest1<GRAPH>::addArc(
+        Node const & u,
+        Node const & v
+){
+    // TODO: Implement.
+    vigra_precondition(false, "Forest1::addArc(): Not implemented yet.");
+}
+
+template <typename GRAPH>
+void Forest1<GRAPH>::erase(
+        Node const & node
+){
+    // TODO: Implement.
+    vigra_precondition(false, "Forest1::erase(Node): Not implemented yet.");
+}
+
+template <typename GRAPH>
+void Forest1<GRAPH>::erase(
+        const Arc & arc
+){
+    // TODO: Implement.
+    vigra_precondition(false, "Forest1::erase(Arc): Not implemented yet.");
+}
+
+
+
 template <typename FOREST>
-class FixedForest0 : public FOREST
+class OLDFixedForest0 : public FOREST
 {
 private:
 
@@ -953,12 +1028,12 @@ public:
     typedef typename Parent::Node Node;
     typedef typename Parent::Arc Arc;
     typedef typename Parent::NodeIt NodeIt;
-    typedef detail::ItemIt<FixedForest0, Node, detail::RootNodeVectorItFunctor<FixedForest0> > RootNodeIt;
-    typedef detail::ItemIt<FixedForest0, Node, detail::LeafNodeVectorItFunctor<FixedForest0> > LeafNodeIt;
+    typedef detail::ItemIt<OLDFixedForest0, Node, detail::RootNodeVectorItFunctor<OLDFixedForest0> > RootNodeIt;
+    typedef detail::ItemIt<OLDFixedForest0, Node, detail::LeafNodeVectorItFunctor<OLDFixedForest0> > LeafNodeIt;
     typedef typename std::vector<Node>::const_iterator const_node_iterator;
 
     /// \brief Create the forest from a given graph.
-    FixedForest0(Parent const & graph);
+    OLDFixedForest0(Parent const & graph);
 
     const_node_iterator roots_cbegin() const;
 
@@ -968,14 +1043,13 @@ public:
 
     const_node_iterator leaves_cend() const;
 
+protected:
+
     // Hide all functions that modify the graph.
     /// \todo Is this a good practice? I guess the "is-a"-relation of OO-programming is violated.
-    Node addNode() = delete;
-    Arc addArc(Node const & u, Node const & v) = delete;
-    void erase(Node const & node) = delete;
-    void erase(Arc const & arc) = delete;
-
-protected:
+    using Parent::addNode;
+    using Parent::addArc;
+    using Parent::erase;
 
     /// \todo Change vector to map, so nodes can safely be added / removed when a forest is built.
 
@@ -987,7 +1061,7 @@ protected:
 };
 
 template <typename FOREST>
-FixedForest0<FOREST>::FixedForest0(
+OLDFixedForest0<FOREST>::OLDFixedForest0(
         const Parent & graph
 )   : Parent(graph)
 {
@@ -1006,25 +1080,25 @@ FixedForest0<FOREST>::FixedForest0(
 }
 
 template <typename FOREST>
-typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::roots_cbegin() const
+typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::roots_cbegin() const
 {
     return roots_.cbegin();
 }
 
 template <typename FOREST>
-typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::roots_cend() const
+typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::roots_cend() const
 {
     return roots_.cend();
 }
 
 template <typename FOREST>
-typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::leaves_cbegin() const
+typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::leaves_cbegin() const
 {
     return leaves_.cbegin();
 }
 
 template <typename FOREST>
-typename FixedForest0<FOREST>::const_node_iterator FixedForest0<FOREST>::leaves_cend() const
+typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::leaves_cend() const
 {
     return leaves_.cend();
 }

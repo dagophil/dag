@@ -227,12 +227,21 @@ void test_forest0()
     std::cout << "test_forest0(): Success!" << std::endl;
 }
 
-void test_fixedforest0()
+void test_forest1()
+{
+    using namespace vigra;
+
+    typedef Forest1<DAGraph0> Forest;
+
+    Forest f;
+}
+
+void test_oldfixedforest0()
 {
     using namespace vigra;
 
     typedef Forest0<DAGraph0> Forest;
-    typedef FixedForest0<Forest> FixedForest;
+    typedef OLDFixedForest0<Forest> FixedForest;
     typedef FixedForest::Node Node;
     typedef FixedForest::RootNodeIt RootNodeIt;
     typedef FixedForest::LeafNodeIt LeafNodeIt;
@@ -278,7 +287,7 @@ void test_fixedforest0()
             vigra_assert(leaves[i] == iter_leaves[i], "The leaf node ids differ.");
     }
 
-    std::cout << "test_fixedforest0(): Success!" << std::endl;
+    std::cout << "test_oldfixedforest0(): Success!" << std::endl;
 }
 
 /*
@@ -348,6 +357,7 @@ int main()
 {
     test_dagraph0();
     test_forest0();
-    test_fixedforest0();
+    test_forest1();
+    test_oldfixedforest0();
     //test_randomforest0();
 }
