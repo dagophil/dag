@@ -291,14 +291,14 @@ namespace detail
 
     /// \brief Functor for ItemIt to iterate over the root nodes of a graph
     /// \note The Graph must implement the roots_cbegin() and roots_cend() methods to return a const_iterator to a vector with the root nodes.
-    template <typename GRAPH>
+    template <typename GRAPH, typename ITERATOR = typename GRAPH::const_iterator>
     struct RootNodeVectorItFunctor
     {
     public:
 
         typedef GRAPH Graph;
+        typedef ITERATOR Iterator;
         typedef typename Graph::Node Node;
-        typedef typename Graph::const_node_iterator const_iterator;
 
         RootNodeVectorItFunctor(Graph const * graph)
             : graph_(graph)
@@ -329,19 +329,19 @@ namespace detail
     protected:
 
         Graph const * graph_;
-        const_iterator it_;
+        Iterator it_;
     };
 
     /// \brief Functor for ItemIt to iterate over the leaf nodes of a graph.
     /// \note The Graph must implement the leaves_cbegin() and leaves_cend() methods to return a const_iterator to a vector with the leaf nodes.
-    template <typename GRAPH>
+    template <typename GRAPH, typename ITERATOR = typename GRAPH::const_iterator>
     struct LeafNodeVectorItFunctor
     {
     public:
 
         typedef GRAPH Graph;
+        typedef ITERATOR Iterator;
         typedef typename Graph::Node Node;
-        typedef typename Graph::const_node_iterator const_iterator;
 
         LeafNodeVectorItFunctor(Graph const * graph)
             : graph_(graph)
@@ -372,7 +372,7 @@ namespace detail
     protected:
 
         Graph const * graph_;
-        const_iterator it_;
+        Iterator it_;
     };
 
     template <typename GRAPH, typename ITEM, typename ITERITEM, typename FUNCTOR>
@@ -719,15 +719,17 @@ inline int DAGraph0::maxArcId() const
     return static_cast<int>(arcs_.size())-1;
 }
 
-inline DAGraph0::Node DAGraph0::source(
+inline auto DAGraph0::source(
         const Arc & arc
-) const {
+) const -> Node
+{
     return Node(arcs_[arc.id()].source);
 }
 
-inline DAGraph0::Node DAGraph0::target(
+inline auto DAGraph0::target(
         const Arc & arc
-) const {
+) const -> Node
+{
     return Node(arcs_[arc.id()].target);
 }
 
@@ -825,15 +827,17 @@ inline int DAGraph0::id(
     return arc.id();
 }
 
-inline DAGraph0::Node DAGraph0::nodeFromId(
+inline auto DAGraph0::nodeFromId(
         int id
-){
+) -> Node
+{
     return Node(id);
 }
 
-inline DAGraph0::Arc DAGraph0::arcFromId(
+inline auto DAGraph0::arcFromId(
         int id
-){
+) -> Arc
+{
     return Arc(id);
 }
 
@@ -849,7 +853,7 @@ inline bool DAGraph0::valid(
     return a.id() >= 0 && a.id() < static_cast<int>(arcs_.size()) && arcs_[a.id()].prev_in != -2;
 }
 
-inline DAGraph0::Node DAGraph0::addNode()
+inline auto DAGraph0::addNode() -> Node
 {
     int n;
 
@@ -875,10 +879,11 @@ inline DAGraph0::Node DAGraph0::addNode()
     return Node(n);
 }
 
-inline DAGraph0::Arc DAGraph0::addArc(
+inline auto DAGraph0::addArc(
         Node const & u,
         Node const & v
-){
+) -> Arc
+{
     int a;
 
     if (first_free_arc_ == -1)
@@ -1013,6 +1018,10 @@ public:
     typedef GRAPH Parent;
     typedef typename Parent::Node Node;
     typedef typename Parent::Arc Arc;
+    typedef std::unordered_set<Node, NodeHash<Node> > ContainerType;
+    typedef typename ContainerType::const_iterator const_iterator;
+    typedef detail::ItemIt<Forest1, Node, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
+    typedef detail::ItemIt<Forest1, Node, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
 
     Forest1() = default;
     Forest1(Forest1 const &) = default;
@@ -1029,33 +1038,38 @@ public:
 
     virtual void erase(Arc const & arc);
 
-    // TODO: Add iterators for root nodes and leaf nodes.
+    const_iterator roots_cbegin() const;
+
+    const_iterator roots_cend() const;
+
+    const_iterator leaves_cbegin() const;
+
+    const_iterator leaves_cend() const;
 
 protected:
 
     /// \brief Unordered set with root nodes.
-    std::unordered_set<Node, NodeHash<Node> > roots_;
+    ContainerType roots_;
 
     /// \brief Unordered set with leaf nodes.
-    std::unordered_set<Node, NodeHash<Node> > leaves_;
+    ContainerType leaves_;
 };
 
 template <typename GRAPH>
-typename Forest1<GRAPH>::Node Forest1<GRAPH>::addNode()
+auto Forest1<GRAPH>::addNode() -> Node
 {
     Node node = Parent::addNode();
     roots_.insert(node);
     leaves_.insert(node);
     return node;
-
-    // TODO: Test this function.
 }
 
 template <typename GRAPH>
-typename Forest1<GRAPH>::Arc Forest1<GRAPH>::addArc(
+auto Forest1<GRAPH>::addArc(
         Node const & u,
         Node const & v
-){
+) -> Arc
+{
     Arc tmp;
     this->firstOut(tmp, u);
     if (!this->valid(tmp))
@@ -1065,8 +1079,6 @@ typename Forest1<GRAPH>::Arc Forest1<GRAPH>::addArc(
         roots_.erase(v);
 
     return Parent::addArc(u, v);
-
-    // TODO: Test this function.
 }
 
 template <typename GRAPH>
@@ -1085,6 +1097,30 @@ void Forest1<GRAPH>::erase(
     vigra_precondition(false, "Forest1::erase(Arc): Not implemented yet.");
 }
 
+template <typename GRAPH>
+auto Forest1<GRAPH>::roots_cbegin() const -> const_iterator
+{
+    return roots_.cbegin();
+}
+
+template <typename GRAPH>
+auto Forest1<GRAPH>::roots_cend() const -> const_iterator
+{
+    return roots_.cend();
+}
+
+template <typename GRAPH>
+auto Forest1<GRAPH>::leaves_cbegin() const -> const_iterator
+{
+    return leaves_.cbegin();
+}
+
+template <typename GRAPH>
+auto Forest1<GRAPH>::leaves_cend() const -> const_iterator
+{
+    return leaves_.cend();
+}
+
 
 
 template <typename FOREST>
@@ -1099,9 +1135,9 @@ public:
     typedef typename Parent::Node Node;
     typedef typename Parent::Arc Arc;
     typedef typename Parent::NodeIt NodeIt;
-    typedef detail::ItemIt<OLDFixedForest0, Node, detail::RootNodeVectorItFunctor<OLDFixedForest0> > RootNodeIt;
-    typedef detail::ItemIt<OLDFixedForest0, Node, detail::LeafNodeVectorItFunctor<OLDFixedForest0> > LeafNodeIt;
     typedef typename std::vector<Node>::const_iterator const_node_iterator;
+    typedef detail::ItemIt<OLDFixedForest0, Node, detail::RootNodeVectorItFunctor<OLDFixedForest0, const_node_iterator> > RootNodeIt;
+    typedef detail::ItemIt<OLDFixedForest0, Node, detail::LeafNodeVectorItFunctor<OLDFixedForest0, const_node_iterator> > LeafNodeIt;
 
     /// \brief Create the forest from a given graph.
     OLDFixedForest0(Parent const & graph);

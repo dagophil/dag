@@ -7,6 +7,19 @@
 #include <vigra/hdf5impex.hxx>
 
 
+template <typename CONTAINER>
+bool unordered_elements_equal(CONTAINER const & v0, CONTAINER const & v1)
+{
+    CONTAINER v0_cpy(v0);
+    CONTAINER v1_cpy(v1);
+    if (v0_cpy.size() != v1_cpy.size())
+        return false;
+    std::sort(v0_cpy.begin(), v0_cpy.end());
+    std::sort(v1_cpy.begin(), v1_cpy.end());
+    for (size_t i = 0; i < v0_cpy.size(); ++i)
+        if (v0_cpy[i] != v1_cpy[i]) return false;
+    return true;
+}
 
 void test_dagraph0()
 {
@@ -53,11 +66,7 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (NodeIt it(g); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in NodeIt.");
     }
 
     // Check that the root node iterator walks over all root nodes.
@@ -66,11 +75,7 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in RootNodeIt.");
     }
 
     // Check that the leaf node iterator walks over all leaf nodes.
@@ -79,11 +84,7 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in LeafNodeIt.");
     }
 
     // Check that the arc iterator walks over all arcs.
@@ -93,11 +94,7 @@ void test_dagraph0()
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
-        vigra_assert(arcs.size() == iter_arcs.size(), "Number of arcs incorrect.");
-        std::sort(arcs.begin(), arcs.end());
-        std::sort(iter_arcs.begin(), iter_arcs.end());
-        for (size_t i = 0; i < arcs.size(); ++i)
-            vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in ArcIt.");
     }
 
     // Check that the out-arc iterator walks over all outgoing arcs of a node.
@@ -107,11 +104,7 @@ void test_dagraph0()
         std::vector<Arc> iter_arcs;
         for (OutArcIt it(g, b); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
-        vigra_assert(arcs.size() == iter_arcs.size(), "Number of arcs incorrect.");
-        std::sort(arcs.begin(), arcs.end());
-        std::sort(iter_arcs.begin(), iter_arcs.end());
-        for (size_t i = 0; i < arcs.size(); ++i)
-            vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in OutArcIt.");
     }
 
     // Check that the in-arc iterator walks over all incoming arcs of a node.
@@ -121,11 +114,7 @@ void test_dagraph0()
         std::vector<Arc> iter_arcs;
         for (InArcIt it(g, d); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
-        vigra_assert(arcs.size() == iter_arcs.size(), "Number of arcs incorrect.");
-        std::sort(arcs.begin(), arcs.end());
-        std::sort(iter_arcs.begin(), iter_arcs.end());
-        for (size_t i = 0; i < arcs.size(); ++i)
-            vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in InArcIt.");
     }
 
     // Check that the parent iterator walks over all parents of a node.
@@ -134,11 +123,7 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (ParentIt it(g, d); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "THe node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in ParentIt.");
     }
 
     // Check that the child iterator walks over all children of a node.
@@ -147,42 +132,38 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (ChildIt it(g, b); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in ChildIt.");
     }
 
     // Test the isRootNode function.
     {
         vigra_assert(g.isRootNode(a) && !g.isRootNode(b) && !g.isRootNode(c) && !g.isRootNode(d) && g.isRootNode(e),
-                     "Error in DAGraph0::isRootNode().");
+                     "Error in isRootNode().");
     }
 
     // Test the isLeafNode function.
     {
         vigra_assert(!g.isLeafNode(a) && !g.isLeafNode(b) && g.isLeafNode(c) && g.isLeafNode(d) && !g.isLeafNode(e),
-                     "Error in DAGraph0::isLeafNode().");
+                     "Error in isLeafNode().");
     }
 
     // Test the parent function.
     {
         Node tmp(a);
         g.parent(tmp);
-        vigra_assert(!g.valid(tmp), "Error in DAGraph0::parent().");
+        vigra_assert(!g.valid(tmp), "Error in parent().");
         tmp = b;
         g.parent(tmp);
-        vigra_assert(tmp == a, "Error in DAGraph0::parent().");
+        vigra_assert(tmp == a, "Error in parent().");
         tmp = c;
         g.parent(tmp);
-        vigra_assert(tmp == b, "Error in DAGraph0::parent().");
+        vigra_assert(tmp == b, "Error in parent().");
         tmp = d;
         g.parent(tmp);
-        vigra_assert(tmp == b || tmp == e, "Error in DAGraph0::parent().");
+        vigra_assert(tmp == b || tmp == e, "Error in parent().");
         tmp = e;
         g.parent(tmp);
-        vigra_assert(!g.valid(tmp), "Error in DAGraph0::parent().");
+        vigra_assert(!g.valid(tmp), "Error in parent().");
     }
 
     // Test the erase function for nodes.
@@ -194,11 +175,7 @@ void test_dagraph0()
         std::vector<Node> iter_nodes;
         for (NodeIt it(g); it != lemon::INVALID; ++it)
             iter_nodes.push_back(Node(it));
-        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes is incorrect.");
-        std::sort(nodes.begin(), nodes.end());
-        std::sort(iter_nodes.begin(), iter_nodes.end());
-        for (size_t i = 0; i < nodes.size(); ++i)
-            vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in erase(Node).");
 
         // All arcs from or to c should have been removed.
         // Check that the arc iterator only walks over the remaining arcs.
@@ -206,11 +183,7 @@ void test_dagraph0()
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
-        vigra_assert(arcs.size() == iter_arcs.size(), "Number of arcs is incorrect.");
-        std::sort(arcs.begin(), arcs.end());
-        std::sort(iter_arcs.begin(), iter_arcs.end());
-        for (size_t i = 0; i < arcs.size(); ++i)
-            vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in erase(Node).");
     }
 
     // Test the erase function for arcs.
@@ -220,12 +193,8 @@ void test_dagraph0()
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
-        vigra_assert(arcs.size() == iter_arcs.size(), "Number of arcs is incorrect.");
-        std::sort(arcs.begin(), arcs.end());
-        std::sort(iter_arcs.begin(), iter_arcs.end());
-        for (size_t i = 0; i < arcs.size(); ++i)
-            vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
-    }
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in erase(Arc).");
+   }
 
     std::cout << "test_dagraph0(): Success!" << std::endl;
 }
@@ -237,6 +206,8 @@ void test_forest1()
     typedef Forest1<DAGraph0> Forest;
     typedef Forest::Node Node;
     typedef Forest::Arc Arc;
+    typedef Forest::RootNodeIt RootNodeIt;
+    typedef Forest::LeafNodeIt LeafNodeIt;
 
     Forest g;
     Node a = g.addNode();
@@ -249,7 +220,37 @@ void test_forest1()
     Arc e2 = g.addArc(b, d);
     Arc e3 = g.addArc(d, e);
 
+    // Test the std-like iterators.
+    {
+        std::vector<Node> nodes {a};
+        std::vector<Node> iter_nodes;
+        for (auto it = g.roots_cbegin(); it != g.roots_cend(); ++it)
+            iter_nodes.push_back(*it);
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in roots_cbegin() or roots_cend().");
+    }
+    {
+        std::vector<Node> nodes {c, e};
+        std::vector<Node> iter_nodes;
+        for (auto it = g.leaves_cbegin(); it != g.leaves_cend(); ++it)
+            iter_nodes.push_back(*it);
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in leaves_cbegin() or leaves_cend().");
+    }
 
+    // Test the lemon-like iterators
+    {
+        std::vector<Node> nodes {a};
+        std::vector<Node> iter_nodes;
+        for (RootNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_nodes.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in RootNodeIt.");
+    }
+    {
+        std::vector<Node> nodes {c, e};
+        std::vector<Node> iter_nodes;
+        for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_nodes.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in LeafNodeIt.");
+    }
 
     std::cout << "test_forest1(): Success!" << std::endl;
 }
@@ -287,10 +288,7 @@ void test_oldfixedforest0()
         std::vector<Node> iter_roots;
         for (RootNodeIt it(f); it != lemon::INVALID; ++it)
             iter_roots.push_back(Node(it));
-        std::sort(iter_roots.begin(), iter_roots.end());
-        vigra_assert(roots.size() == iter_roots.size(), "Number of root nodes is incorrect.");
-        for (size_t i = 0; i < roots.size(); ++i)
-            vigra_assert(roots[i] == iter_roots[i], "The root node ids differ.");
+        vigra_assert(unordered_elements_equal(roots, iter_roots), "Error in RootNodeIt.");
     }
 
     // Check that the leaf node iterator walks over all leaf nodes.
@@ -299,10 +297,7 @@ void test_oldfixedforest0()
         std::vector<Node> iter_leaves;
         for (LeafNodeIt it(f); it != lemon::INVALID; ++it)
             iter_leaves.push_back(Node(it));
-        std::sort(iter_leaves.begin(), iter_leaves.end());
-        vigra_assert(leaves.size() == iter_leaves.size(), "Number of leaf nodes is incorrect.");
-        for (size_t i = 0; i < leaves.size(); ++i)
-            vigra_assert(leaves[i] == iter_leaves[i], "The leaf node ids differ.");
+        vigra_assert(unordered_elements_equal(leaves, iter_leaves), "Error in LeafNodeIt.");
     }
 
     std::cout << "test_oldfixedforest0(): Success!" << std::endl;
