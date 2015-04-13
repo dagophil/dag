@@ -229,9 +229,12 @@ void test_forest1()
 {
     using namespace vigra;
 
-    typedef Forest1<DAGraph0> Forest;
+    typedef DAGraph0 Graph;
+    typedef Forest1<Graph> Forest;
     typedef Forest::Node Node;
     typedef Forest::Arc Arc;
+    typedef Forest::NodeIt NodeIt;
+    typedef Forest::ArcIt ArcIt;
     typedef Forest::RootNodeIt RootNodeIt;
     typedef Forest::LeafNodeIt LeafNodeIt;
 
@@ -323,6 +326,50 @@ void test_forest1()
         e2 = g.addArc(b, d);
     }
 
+    // Test the constructor from a graph.
+    {
+        Graph gr;
+        Node a = gr.addNode();
+        Node b = gr.addNode();
+        Node c = gr.addNode();
+        Node d = gr.addNode();
+        Node e = gr.addNode();
+        Node f = gr.addNode();
+        Node g = gr.addNode();
+        Node h = gr.addNode();
+        Arc e0 = gr.addArc(a, b);
+        Arc e1 = gr.addArc(b, c);
+        Arc e2 = gr.addArc(b, d);
+        Arc e3 = gr.addArc(d, e);
+        Arc e4 = gr.addArc(f, g);
+        Arc e5 = gr.addArc(f, h);
+
+        Forest fo(gr);
+
+        std::vector<Node> nodes {a, b, c, d, e, f, g, h};
+        std::vector<Node> iter_nodes;
+        for (NodeIt it(fo); it != lemon::INVALID; ++it)
+            iter_nodes.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in constructor from parent graph.");
+
+        std::vector<Arc> arcs {e0, e1, e2, e3, e4, e5};
+        std::vector<Arc> iter_arcs;
+        for (ArcIt it(fo); it != lemon::INVALID; ++it)
+            iter_arcs.push_back(Arc(it));
+        vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in constructor from parent graph.");
+
+        std::vector<Node> roots {a, f};
+        std::vector<Node> iter_roots;
+        for (RootNodeIt it(fo); it != lemon::INVALID; ++it)
+            iter_roots.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(roots, iter_roots), "Error in constructor from parent graph.");
+
+        std::vector<Node> leaves {c, e, g, h};
+        std::vector<Node> iter_leaves;
+        for (LeafNodeIt it(fo); it != lemon::INVALID; ++it)
+            iter_leaves.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(leaves, iter_leaves), "Error in constructor from parent graph.");
+    }
 
     std::cout << "test_forest1(): Success!" << std::endl;
 }

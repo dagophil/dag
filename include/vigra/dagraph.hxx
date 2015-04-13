@@ -1039,6 +1039,13 @@ public:
     typedef detail::ItemIt<Forest1, Node, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
     typedef detail::ItemIt<Forest1, Node, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
 
+    // TODO: These typedefs are not used within the class. Do they need to be made visible this way? Or are they visible by default (from the superclass)?
+    typedef typename Parent::index_type index_type;
+    typedef typename Parent::NodeIt NodeIt;
+    typedef typename Parent::ArcIt ArcIt;
+    typedef typename Parent::OutArcIt OutArcIt;
+    typedef typename Parent::InArcIt InArcIt;
+
     Forest1() = default;
     Forest1(Forest1 const &) = default;
     Forest1(Forest1 &&) = default;
@@ -1046,13 +1053,16 @@ public:
     Forest1 & operator=(Forest1 const &) = default;
     Forest1 & operator=(Forest1 &&) = default;
 
+    /// \brief Construct the forest from the given graph.
+    Forest1(Parent const &);
+
     virtual Node addNode() override;
 
     virtual Arc addArc(Node const & u, Node const & v) override;
 
-    virtual void erase(Node const & node);
+    virtual void erase(Node const & node) override;
 
-    virtual void erase(Arc const & arc);
+    virtual void erase(Arc const & arc) override;
 
     const_iterator roots_cbegin() const;
 
@@ -1070,6 +1080,20 @@ protected:
     /// \brief Unordered set with leaf nodes.
     ContainerType leaves_;
 };
+
+template <typename GRAPH>
+Forest1<GRAPH>::Forest1(const Parent & other)
+    : Parent(other)
+{
+    for (typename Parent::RootNodeIt it(*this); it != lemon::INVALID; ++it)
+    {
+        roots_.insert(Node(it));
+    }
+    for (typename Parent::LeafNodeIt it(*this); it != lemon::INVALID; ++it)
+    {
+        leaves_.insert(Node(it));
+    }
+}
 
 template <typename GRAPH>
 auto Forest1<GRAPH>::addNode() -> Node
