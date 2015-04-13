@@ -24,7 +24,7 @@ namespace detail
             : id_(-1)
         {}
 
-        GenericGraphItem(const index_type id  )
+        GenericGraphItem(const index_type id)
             : id_(id)
         {}
 
@@ -637,6 +637,9 @@ public:
     /// \brief Return one of the parents of the given node.
     void parent(Node & node) const;
 
+    /// \brief Return one of the children of the given node.
+    void child(Node & node) const;
+
     /// \brief Return the id of the given node.
     static int id(Node const & node);
 
@@ -811,6 +814,17 @@ inline void DAGraph0::parent(
     firstIn(arc, node);
     if (valid(arc))
         node = source(arc);
+    else
+        node = lemon::INVALID;
+}
+
+inline void DAGraph0::child(
+        Node & node
+) const {
+    Arc arc;
+    firstOut(arc, node);
+    if (valid(arc))
+        node = target(arc);
     else
         node = lemon::INVALID;
 }
@@ -1018,6 +1032,8 @@ public:
     typedef GRAPH Parent;
     typedef typename Parent::Node Node;
     typedef typename Parent::Arc Arc;
+    typedef typename Parent::ParentIt ParentIt;
+    typedef typename Parent::ChildIt ChildIt;
     typedef std::unordered_set<Node, NodeHash<Node> > ContainerType;
     typedef typename ContainerType::const_iterator const_iterator;
     typedef detail::ItemIt<Forest1, Node, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
@@ -1085,16 +1101,28 @@ template <typename GRAPH>
 void Forest1<GRAPH>::erase(
         Node const & node
 ){
-    // TODO: Implement.
-    vigra_precondition(false, "Forest1::erase(Node): Not implemented yet.");
+    Parent::erase(node);
+    roots_.erase(node);
+    leaves_.erase(node);
 }
 
 template <typename GRAPH>
 void Forest1<GRAPH>::erase(
-        const Arc & arc
+        Arc const & arc
 ){
-    // TODO: Implement.
-    vigra_precondition(false, "Forest1::erase(Arc): Not implemented yet.");
+    Node src = this->source(arc);
+    Node tar = this->target(arc);
+    Parent::erase(arc);
+
+    Node tmp = src;
+    this->child(tmp);
+    if (!this->valid(tmp))
+        leaves_.insert(src);
+
+    tmp = tar;
+    this->parent(tmp);
+    if (!this->valid(tmp))
+        roots_.insert(tar);
 }
 
 template <typename GRAPH>

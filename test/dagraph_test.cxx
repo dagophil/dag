@@ -166,6 +166,25 @@ void test_dagraph0()
         vigra_assert(!g.valid(tmp), "Error in parent().");
     }
 
+    // Test the child function.
+    {
+        Node tmp(a);
+        g.child(tmp);
+        vigra_assert(tmp == b, "Error in child().");
+        tmp = b;
+        g.child(tmp);
+        vigra_assert(tmp == c || tmp == d, "Error in child().");
+        tmp = c;
+        g.child(tmp);
+        vigra_assert(!g.valid(tmp), "Error in child().");
+        tmp = d;
+        g.child(tmp);
+        vigra_assert(!g.valid(tmp), "Error in child().");
+        tmp = e;
+        g.child(tmp);
+        vigra_assert(tmp == d, "Error in child().");
+    }
+
     // Test the erase function for nodes.
     {
         g.erase(c);
@@ -184,16 +203,23 @@ void test_dagraph0()
         for (ArcIt it(g); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
         vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in erase(Node).");
+
+        // Re-add the node and the arc for the other tests.
+        c = g.addNode();
+        e1 = g.addArc(b, c);
     }
 
     // Test the erase function for arcs.
     {
         g.erase(e0);
-        std::vector<Arc> arcs{e2, e3};
+        std::vector<Arc> arcs{e1, e2, e3};
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
             iter_arcs.push_back(Arc(it));
         vigra_assert(unordered_elements_equal(arcs, iter_arcs), "Error in erase(Arc).");
+
+        // Re-add the arc for the other tests.
+        e0 = g.addArc(a, b);
    }
 
     std::cout << "test_dagraph0(): Success!" << std::endl;
@@ -251,6 +277,52 @@ void test_forest1()
             iter_nodes.push_back(Node(it));
         vigra_assert(unordered_elements_equal(nodes, iter_nodes), "Error in LeafNodeIt.");
     }
+
+    // Check the erase function for nodes.
+    {
+        g.erase(d);
+
+        // Check that the root nodes are correct.
+        std::vector<Node> roots {a, e};
+        std::vector<Node> iter_roots;
+        for (RootNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_roots.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(roots, iter_roots), "Error in erase(Node).");
+
+        // Check that the leaf nodes are correct.
+        std::vector<Node> leaves {c, e};
+        std::vector<Node> iter_leaves;
+        for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_leaves.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(leaves, iter_leaves), "Error in erase(Node).");
+
+        // Re-add the node and the arcs for the other tests.
+        d = g.addNode();
+        e2 = g.addArc(b, d);
+        e3 = g.addArc(d, e);
+    }
+
+    // Check the erase function for arcs.
+    {
+        g.erase(e2);
+
+        // Check that the root nodes are correct.
+        std::vector<Node> roots {a, d};
+        std::vector<Node> iter_roots;
+        for (RootNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_roots.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(roots, iter_roots), "Error in erase(Arc).");
+
+        // Check that the leaf nodes are correct.
+        std::vector<Node> leaves {c, e};
+        std::vector<Node> iter_leaves;
+        for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
+            iter_leaves.push_back(Node(it));
+        vigra_assert(unordered_elements_equal(leaves, iter_leaves), "Error in erase(Arc).");
+
+        e2 = g.addArc(b, d);
+    }
+
 
     std::cout << "test_forest1(): Success!" << std::endl;
 }
