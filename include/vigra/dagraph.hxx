@@ -1082,7 +1082,7 @@ protected:
 };
 
 template <typename GRAPH>
-Forest1<GRAPH>::Forest1(const Parent & other)
+Forest1<GRAPH>::Forest1(Parent const & other)
     : Parent(other)
 {
     for (typename Parent::RootNodeIt it(*this); it != lemon::INVALID; ++it)
