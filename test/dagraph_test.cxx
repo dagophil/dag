@@ -21,6 +21,7 @@ void test_dagraph0()
     typedef Graph::ArcIt ArcIt;
     typedef Graph::OutArcIt OutArcIt;
     typedef Graph::InArcIt InArcIt;
+    typedef Graph::ParentIt ParentIt;
     typedef Graph::ChildIt ChildIt;
 
     // Create the graph.
@@ -127,6 +128,19 @@ void test_dagraph0()
             vigra_assert(arcs[i] == iter_arcs[i], "The arc ids differ.");
     }
 
+    // Check that the parent iterator walks over all parents of a node.
+    {
+        std::vector<Node> nodes {b, e};
+        std::vector<Node> iter_nodes;
+        for (ParentIt it(g, d); it != lemon::INVALID; ++it)
+            iter_nodes.push_back(Node(it));
+        vigra_assert(nodes.size() == iter_nodes.size(), "Number of nodes incorrect.");
+        std::sort(nodes.begin(), nodes.end());
+        std::sort(iter_nodes.begin(), iter_nodes.end());
+        for (size_t i = 0; i < nodes.size(); ++i)
+            vigra_assert(nodes[i] == iter_nodes[i], "THe node ids differ.");
+    }
+
     // Check that the child iterator walks over all children of a node.
     {
         std::vector<Node> nodes {c, d};
@@ -138,6 +152,37 @@ void test_dagraph0()
         std::sort(iter_nodes.begin(), iter_nodes.end());
         for (size_t i = 0; i < nodes.size(); ++i)
             vigra_assert(nodes[i] == iter_nodes[i], "The node ids differ.");
+    }
+
+    // Test the isRootNode function.
+    {
+        vigra_assert(g.isRootNode(a) && !g.isRootNode(b) && !g.isRootNode(c) && !g.isRootNode(d) && g.isRootNode(e),
+                     "Error in DAGraph0::isRootNode().");
+    }
+
+    // Test the isLeafNode function.
+    {
+        vigra_assert(!g.isLeafNode(a) && !g.isLeafNode(b) && g.isLeafNode(c) && g.isLeafNode(d) && !g.isLeafNode(e),
+                     "Error in DAGraph0::isLeafNode().");
+    }
+
+    // Test the parent function.
+    {
+        Node tmp(a);
+        g.parent(tmp);
+        vigra_assert(!g.valid(tmp), "Error in DAGraph0::parent().");
+        tmp = b;
+        g.parent(tmp);
+        vigra_assert(tmp == a, "Error in DAGraph0::parent().");
+        tmp = c;
+        g.parent(tmp);
+        vigra_assert(tmp == b, "Error in DAGraph0::parent().");
+        tmp = d;
+        g.parent(tmp);
+        vigra_assert(tmp == b || tmp == e, "Error in DAGraph0::parent().");
+        tmp = e;
+        g.parent(tmp);
+        vigra_assert(!g.valid(tmp), "Error in DAGraph0::parent().");
     }
 
     // Test the erase function for nodes.
@@ -185,62 +230,35 @@ void test_dagraph0()
     std::cout << "test_dagraph0(): Success!" << std::endl;
 }
 
-void test_forest0()
-{
-    using namespace vigra;
-
-    typedef Forest0<DAGraph0> Forest;
-    typedef Forest::Node Node;
-    typedef Forest::Arc Arc;
-
-
-    // Create the graph.
-    Forest g;
-    Node a = g.addNode();
-    Node b = g.addNode();
-    Node c = g.addNode();
-    Node d = g.addNode();
-    Arc e0 = g.addArc(a, b);
-    Arc e1 = g.addArc(b, c);
-    Arc e2 = g.addArc(b, d);
-
-    // Test the parent() function.
-    {
-        Node tmp(d);
-        g.parent(tmp);
-        vigra_assert(tmp == b, "Error in Forest0::parent().");
-        tmp = c;
-        g.parent(tmp);
-        vigra_assert(tmp == b, "Error in Forest0::parent().");
-        g.parent(tmp);
-        vigra_assert(tmp == a, "Error in Forest0::parent().");
-        g.parent(tmp);
-        vigra_assert(tmp == lemon::INVALID, "Error in Forest0::parent().");
-    }
-
-    // Test the is_root_node() function.
-    {
-        vigra_assert(g.is_root_node(a) && !g.is_root_node(b) && !g.is_root_node(c) && !g.is_root_node(d),
-                     "Error in Forest0::is_root_node().");
-    }
-
-    std::cout << "test_forest0(): Success!" << std::endl;
-}
-
 void test_forest1()
 {
     using namespace vigra;
 
     typedef Forest1<DAGraph0> Forest;
+    typedef Forest::Node Node;
+    typedef Forest::Arc Arc;
 
-    Forest f;
+    Forest g;
+    Node a = g.addNode();
+    Node b = g.addNode();
+    Node c = g.addNode();
+    Node d = g.addNode();
+    Node e = g.addNode();
+    Arc e0 = g.addArc(a, b);
+    Arc e1 = g.addArc(b, c);
+    Arc e2 = g.addArc(b, d);
+    Arc e3 = g.addArc(d, e);
+
+
+
+    std::cout << "test_forest1(): Success!" << std::endl;
 }
 
 void test_oldfixedforest0()
 {
     using namespace vigra;
 
-    typedef Forest0<DAGraph0> Forest;
+    typedef DAGraph0 Forest;
     typedef OLDFixedForest0<Forest> FixedForest;
     typedef FixedForest::Node Node;
     typedef FixedForest::RootNodeIt RootNodeIt;
@@ -356,7 +374,6 @@ void test_randomforest0()
 int main()
 {
     test_dagraph0();
-    test_forest0();
     test_forest1();
     test_oldfixedforest0();
     //test_randomforest0();

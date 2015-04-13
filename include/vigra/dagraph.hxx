@@ -504,7 +504,7 @@ namespace detail
         void first(Node const & sourcenode, Node & childnode)
         {
             graph_->firstOut(arc_, sourcenode);
-            if (arc_ != lemon::INVALID)
+            if (graph_->valid(arc_))
                 childnode = graph_->target(arc_);
             else
                 childnode = lemon::INVALID;
@@ -513,10 +513,51 @@ namespace detail
         void next(Node & childnode)
         {
             graph_->nextOut(arc_);
-            if (arc_ != lemon::INVALID)
+            if (graph_->valid(arc_))
                 childnode = graph_->target(arc_);
             else
                 childnode = lemon::INVALID;
+        }
+
+    protected:
+
+        Graph const * graph_;
+        Arc arc_;
+    };
+
+    template <typename GRAPH>
+    struct ParentItFunctor
+    {
+    public:
+
+        typedef GRAPH Graph;
+        typedef typename Graph::Node Node;
+        typedef typename Graph::Arc Arc;
+
+        ParentItFunctor(Graph const * graph)
+            : graph_(graph)
+        {}
+
+        ParentItFunctor(Graph const & graph)
+            : graph_(&graph)
+        {}
+
+        void first(Node const & sourcenode, Node & parentnode)
+        {
+            graph_->firstIn(arc_, sourcenode);
+            if (graph_->valid(arc_))
+                parentnode = graph_->source(arc_);
+            else
+                parentnode = lemon::INVALID;
+        }
+
+        void next(Node & parentnode)
+        {
+            graph_->nextIn(arc_);
+            if (graph_->valid(arc_))
+                parentnode = graph_->source(arc_);
+            else
+                parentnode = lemon::INVALID;
         }
 
     protected:
@@ -545,6 +586,7 @@ public:
     typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
+    typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ParentItFunctor<DAGraph0> > ParentIt;
     typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ChildItFunctor<DAGraph0> > ChildIt;
 
     DAGraph0();
@@ -556,49 +598,80 @@ public:
     DAGraph0 & operator=(DAGraph0 const &) = default;
     DAGraph0 & operator=(DAGraph0 &&) = default;
 
+    /// \brief Return the maximum of all node ids that were ever used.
     int maxNodeId() const;
 
+    /// \brief Return the maximum of all arc ids that were ever used.
     int maxArcId() const;
 
+    /// \brief Return the source node of the given arc.
     Node source(Arc const & arc) const;
 
+    /// \brief Return the target node of the given arc.
     Node target(Arc const & arc) const;
 
+    /// \brief Set node to the first valid node.
     void first(Node & node) const;
 
+    /// \brief Set node to the next valid node.
     void next(Node & node) const;
 
+    /// \brief Set arc to the first valid arc.
     void first(Arc & arc) const;
 
+    /// \brief Set arc to the next valid arc.
     void next(Arc & arc) const;
 
+    /// \brief Set arc to the first outgoing arc of node.
     void firstOut(Arc & arc, Node const & node) const;
 
+    /// \brief Set arc to the next outgoing arc of node.
     void nextOut(Arc & arc) const;
 
+    /// \brief Set arc to the first incoming arc of node.
     void firstIn(Arc & arc, Node const & node) const;
 
+    /// \brief Set arc to the next incoming arc of node.
     void nextIn(Arc & arc) const;
 
+    /// \brief Return one of the parents of the given node.
+    void parent(Node & node) const;
+
+    /// \brief Return the id of the given node.
     static int id(Node const & node);
 
+    /// \brief Return the id of the given arc.
     static int id(Arc const & arc);
 
+    /// \brief Create a node object with the given id.
     static Node nodeFromId(int id);
 
+    /// \brief Create an arc object with the given id.
     static Arc arcFromId(int id);
 
+    /// \brief Return true if the graph contains the given node.
     bool valid(Node const & n) const;
 
+    /// \brief Return true if the graph contains the given arc.
     bool valid(Arc const & a) const;
 
+    /// \brief Add a node to the graph and return it.
     virtual Node addNode();
 
+    /// \brief Add an arc from u to v to the graph and return it.
     virtual Arc addArc(Node const & u, Node const & v);
 
+    /// \brief Remove the given node and all connected arcs from the graph.
     virtual void erase(Node const & node);
 
+    /// \brief Remove the given arc from the graph.
     virtual void erase(Arc const & arc);
+
+    /// \brief Return true if the given node is a root node.
+    bool isRootNode(Node const & node) const;
+
+    /// \brief Return true if the given node is a leaf node.
+    bool isLeafNode(Node const & node) const;
 
 protected:
 
@@ -729,6 +802,17 @@ inline void DAGraph0::nextIn(
     arc.set_id(arcs_[arc.id()].next_in);
 }
 
+inline void DAGraph0::parent(
+        Node & node
+) const {
+    Arc arc;
+    firstIn(arc, node);
+    if (valid(arc))
+        node = source(arc);
+    else
+        node = lemon::INVALID;
+}
+
 inline int DAGraph0::id(
         const Node & node
 ){
@@ -832,7 +916,7 @@ inline void DAGraph0::erase(
     // erase all outgoing arcs
     Arc arc;
     firstOut(arc, node);
-    while (arc != lemon::INVALID)
+    while (valid(arc))
     {
         erase(arc);
         firstOut(arc, node);
@@ -840,7 +924,7 @@ inline void DAGraph0::erase(
 
     // erase all incoming arcs
     firstIn(arc, node);
-    while (arc != lemon::INVALID)
+    while (valid(arc))
     {
         erase(arc);
         firstIn(arc, node);
@@ -886,59 +970,25 @@ inline void DAGraph0::erase(
     arcs_[a].prev_in = -2;
 }
 
-
-
-/// \brief The Forest0 class extends a graph by some rootnode and parent functions.
-template <typename GRAPH>
-class Forest0 : public GRAPH
-{
-public:
-
-    typedef GRAPH Parent;
-    typedef typename Parent::Node Node;
-    typedef typename Parent::Arc Arc;
-
-    Forest0() = default;
-
-    /// \todo Which of the following are really needed? Are there problems with the defaults?
-    Forest0(Forest0 const &) = default;
-    Forest0(Forest0 &&) = default;
-    ~Forest0() = default;
-    Forest0 & operator=(Forest0 const &) = default;
-    Forest0 & operator=(Forest0 &&) = default;
-
-    bool is_root_node(Node const & node) const;
-
-    void parent(Node & node) const;
-};
-
-template <typename GRAPH>
-bool Forest0<GRAPH>::is_root_node(
-        const Node & node
+inline bool DAGraph0::isRootNode(
+        Node const & node
 ) const {
     Arc tmp;
-    this->firstIn(tmp, node);
-    return tmp == lemon::INVALID;
+    firstIn(tmp, node);
+    return !valid(tmp);
 }
 
-template <typename GRAPH>
-void Forest0<GRAPH>::parent(
-        Node & node
+inline bool DAGraph0::isLeafNode(
+        Node const & node
 ) const {
-    Arc arc;
-    this->firstIn(arc, node);
-    if (this->valid(arc))
-    {
-        node = this->source(arc);
-    }
-    else
-    {
-        node = lemon::INVALID;
-    }
+    Arc tmp;
+    firstOut(tmp, node);
+    return !valid(tmp);
 }
 
 
 
+/// \brief Hash functor for unordered_set<Node>.
 template <class NODE>
 struct NodeHash
 {
@@ -952,6 +1002,9 @@ protected:
     std::hash<int> h_;
 };
 
+
+
+/// \brief The Forest1 class extends a graph by some rootnode and parent functions. Building Forest1 is slower than building Forest0, but the Forest1 iterators are faster.
 template <typename GRAPH>
 class Forest1 : public GRAPH
 {
@@ -962,6 +1015,11 @@ public:
     typedef typename Parent::Arc Arc;
 
     Forest1() = default;
+    Forest1(Forest1 const &) = default;
+    Forest1(Forest1 &&) = default;
+    ~Forest1() = default;
+    Forest1 & operator=(Forest1 const &) = default;
+    Forest1 & operator=(Forest1 &&) = default;
 
     virtual Node addNode() override;
 
@@ -985,8 +1043,12 @@ protected:
 template <typename GRAPH>
 typename Forest1<GRAPH>::Node Forest1<GRAPH>::addNode()
 {
-    // TODO: Implement.
-    vigra_precondition(false, "Forest1::addNode(): Not implemented yet.");
+    Node node = Parent::addNode();
+    roots_.insert(node);
+    leaves_.insert(node);
+    return node;
+
+    // TODO: Test this function.
 }
 
 template <typename GRAPH>
@@ -994,8 +1056,17 @@ typename Forest1<GRAPH>::Arc Forest1<GRAPH>::addArc(
         Node const & u,
         Node const & v
 ){
-    // TODO: Implement.
-    vigra_precondition(false, "Forest1::addArc(): Not implemented yet.");
+    Arc tmp;
+    this->firstOut(tmp, u);
+    if (!this->valid(tmp))
+        leaves_.erase(u);
+    this->firstIn(tmp, v);
+    if (!this->valid(tmp))
+        roots_.erase(v);
+
+    return Parent::addArc(u, v);
+
+    // TODO: Test this function.
 }
 
 template <typename GRAPH>
