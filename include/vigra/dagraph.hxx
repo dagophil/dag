@@ -75,24 +75,24 @@ namespace detail
 
     /// \brief Iterator for graph items (e. g. node, arc, leaf nodes, ...).
     /// \note Like in lemon, the iterator is a subclass of ITEM, so it can be used without dereferencing.
-    template <typename GRAPH, typename ITEM, typename FUNCTOR>
-    class ItemIt : public ITEM
+    template <typename GRAPH, typename FUNCTOR>
+    class ItemIt : public FUNCTOR::Item
     {
     public:
 
         typedef GRAPH Graph;
-        typedef ITEM Item;
         typedef FUNCTOR Functor;
+        typedef typename Functor::Item Item;
 
         ItemIt(Graph const & graph)
-            : ITEM(),
+            : Item(),
               functor_(graph)
         {
             functor_.first(static_cast<Item &>(*this));
         }
 
         ItemIt(lemon::Invalid)
-            : ITEM(lemon::INVALID),
+            : Item(lemon::INVALID),
               functor_(nullptr)
         {}
 
@@ -125,6 +125,7 @@ namespace detail
 
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
+        typedef Node Item;  // needed to be used by ItemIt
 
         NodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -157,6 +158,7 @@ namespace detail
 
         typedef GRAPH Graph;
         typedef typename Graph::Arc Arc;
+        typedef Arc Item;  // needed to be used by ItemIt
 
         ArcItFunctor(Graph const * graph)
             : graph_(graph)
@@ -190,6 +192,7 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by ItemIt
 
         RootNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -245,6 +248,7 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by ItemIt
 
         LeafNodeItFunctor(Graph const * graph)
             : graph_(graph)
@@ -301,6 +305,7 @@ namespace detail
         typedef GRAPH Graph;
         typedef ITERATOR Iterator;
         typedef typename Graph::Node Node;
+        typedef Node Item;  // needed to be used by ItemIt
 
         RootNodeVectorItFunctor(Graph const * graph)
             : graph_(graph)
@@ -344,6 +349,7 @@ namespace detail
         typedef GRAPH Graph;
         typedef ITERATOR Iterator;
         typedef typename Graph::Node Node;
+        typedef Node Item;  // needed to be used by ItemIt
 
         LeafNodeVectorItFunctor(Graph const * graph)
             : graph_(graph)
@@ -377,25 +383,25 @@ namespace detail
         Iterator it_;
     };
 
-    template <typename GRAPH, typename ITEM, typename ITERITEM, typename FUNCTOR>
-    class SubItemIt : public ITERITEM
+    template <typename GRAPH, typename FUNCTOR>
+    class SubItemIt : public FUNCTOR::IterItem
     {
     public:
 
         typedef GRAPH Graph;
-        typedef ITEM Item;
-        typedef ITERITEM IterItem;
         typedef FUNCTOR Functor;
+        typedef typename Functor::Item Item;
+        typedef typename Functor::IterItem IterItem;
 
         SubItemIt(Graph const & graph, Item const & item)
-            : ITERITEM(),
+            : IterItem(),
               functor_(graph)
         {
             functor_.first(item, static_cast<IterItem &>(*this));
         }
 
         SubItemIt(lemon::Invalid)
-            : ITERITEM(lemon::INVALID),
+            : IterItem(lemon::INVALID),
               functor_(nullptr)
         {}
 
@@ -429,6 +435,8 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by SubItemIt
+        typedef Arc IterItem;  // needed to be used by SubItemIt
 
         OutArcItFunctor(Graph const * graph)
             : graph_(graph)
@@ -462,6 +470,8 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by SubItemIt
+        typedef Arc IterItem;  // needed to be used by SubItemIt
 
         InArcItFunctor(Graph const * graph)
             : graph_(graph)
@@ -486,6 +496,7 @@ namespace detail
         Graph const * graph_;
     };
 
+    /// \brief Functor for SubItemIt to iterate over all children of a node.
     template <typename GRAPH>
     struct ChildItFunctor
     {
@@ -494,6 +505,8 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by SubItemIt
+        typedef Node IterItem;  // needed to be used by SubItemIt
 
         ChildItFunctor(Graph const * graph)
             : graph_(graph)
@@ -527,6 +540,7 @@ namespace detail
         Arc arc_;
     };
 
+    /// \brief Functor for SubItemIt to iterate over all parents of a node.
     template <typename GRAPH>
     struct ParentItFunctor
     {
@@ -535,6 +549,8 @@ namespace detail
         typedef GRAPH Graph;
         typedef typename Graph::Node Node;
         typedef typename Graph::Arc Arc;
+        typedef Node Item;  // needed to be used by SubItemIt
+        typedef Node IterItem;  // needed to be used by SubItemIt
 
         ParentItFunctor(Graph const * graph)
             : graph_(graph)
@@ -582,14 +598,14 @@ public:
     typedef Int64 index_type;
     typedef detail::GenericGraphItem<index_type, 0> Node;
     typedef detail::GenericGraphItem<index_type, 1> Arc;
-    typedef detail::ItemIt<DAGraph0, Node, detail::NodeItFunctor<DAGraph0> > NodeIt;
-    typedef detail::ItemIt<DAGraph0, Node, detail::RootNodeItFunctor<DAGraph0> > RootNodeIt;
-    typedef detail::ItemIt<DAGraph0, Node, detail::LeafNodeItFunctor<DAGraph0> > LeafNodeIt;
-    typedef detail::ItemIt<DAGraph0, Arc, detail::ArcItFunctor<DAGraph0> > ArcIt;
-    typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
-    typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
-    typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ParentItFunctor<DAGraph0> > ParentIt;
-    typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ChildItFunctor<DAGraph0> > ChildIt;
+    typedef detail::ItemIt<DAGraph0, detail::NodeItFunctor<DAGraph0> > NodeIt;
+    typedef detail::ItemIt<DAGraph0, detail::RootNodeItFunctor<DAGraph0> > RootNodeIt;
+    typedef detail::ItemIt<DAGraph0, detail::LeafNodeItFunctor<DAGraph0> > LeafNodeIt;
+    typedef detail::ItemIt<DAGraph0, detail::ArcItFunctor<DAGraph0> > ArcIt;
+    typedef detail::SubItemIt<DAGraph0, detail::OutArcItFunctor<DAGraph0> > OutArcIt;
+    typedef detail::SubItemIt<DAGraph0, detail::InArcItFunctor<DAGraph0> > InArcIt;
+    typedef detail::SubItemIt<DAGraph0, detail::ParentItFunctor<DAGraph0> > ParentIt;
+    typedef detail::SubItemIt<DAGraph0, detail::ChildItFunctor<DAGraph0> > ChildIt;
 
     template <typename VALUETYPE>
     struct PropertyMap
@@ -1046,8 +1062,8 @@ public:
     typedef typename Parent::ChildIt ChildIt;
     typedef std::unordered_set<Node, NodeHash<Node> > ContainerType;
     typedef typename ContainerType::const_iterator const_iterator;
-    typedef detail::ItemIt<Forest1, Node, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
-    typedef detail::ItemIt<Forest1, Node, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
+    typedef detail::ItemIt<Forest1, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
+    typedef detail::ItemIt<Forest1, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
 
     // TODO: These typedefs are not used within the class. Do they need to be made visible this way? Or are they visible by default (from the superclass)?
     typedef typename Parent::index_type index_type;
