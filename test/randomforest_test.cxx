@@ -30,7 +30,10 @@ void test_randomforest0()
     test_y.reshape(Shape1(info.shape().begin()));
     readHDF5(info, test_y);
 
-    RandomForestBase0<Forest1<DAGraph0> > rf;
+    // Train a random forest.
+    RandomForest0<Forest1<DAGraph0> > rf;
+    FeatureGetter<float> train_feats(train_x);
+    rf.train(train_feats, train_y, 20);
 
     std::cout << "test_randomforest0(): Success!" << std::endl;
 }
