@@ -4,7 +4,9 @@
 #include <vector>
 #include <utility>
 #include <unordered_set>
-#include <vigra/graphs.hxx>
+#include <map>
+
+#include <vigra/graphs.hxx>  // for lemon::INVALID
 
 namespace vigra
 {
@@ -588,6 +590,14 @@ public:
     typedef detail::SubItemIt<DAGraph0, Node, Arc, detail::InArcItFunctor<DAGraph0> > InArcIt;
     typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ParentItFunctor<DAGraph0> > ParentIt;
     typedef detail::SubItemIt<DAGraph0, Node, Node, detail::ChildItFunctor<DAGraph0> > ChildIt;
+
+    template <typename VALUETYPE>
+    struct PropertyMap
+    {
+        typedef std::map<Node, VALUETYPE> type;
+    };
+//    template <typename VALUETYPE>
+//    using PropertyMap = std::map<Node, VALUETYPE>;
 
     DAGraph0();
 
@@ -1174,93 +1184,6 @@ auto Forest1<GRAPH>::leaves_cend() const -> const_iterator
 }
 
 
-
-template <typename FOREST>
-class OLDFixedForest0 : public FOREST
-{
-private:
-
-    typedef FOREST Parent;
-
-public:
-
-    typedef typename Parent::Node Node;
-    typedef typename Parent::Arc Arc;
-    typedef typename Parent::NodeIt NodeIt;
-    typedef typename std::vector<Node>::const_iterator const_node_iterator;
-    typedef detail::ItemIt<OLDFixedForest0, Node, detail::RootNodeVectorItFunctor<OLDFixedForest0, const_node_iterator> > RootNodeIt;
-    typedef detail::ItemIt<OLDFixedForest0, Node, detail::LeafNodeVectorItFunctor<OLDFixedForest0, const_node_iterator> > LeafNodeIt;
-
-    /// \brief Create the forest from a given graph.
-    OLDFixedForest0(Parent const & graph);
-
-    const_node_iterator roots_cbegin() const;
-
-    const_node_iterator roots_cend() const;
-
-    const_node_iterator leaves_cbegin() const;
-
-    const_node_iterator leaves_cend() const;
-
-protected:
-
-    // Hide all functions that modify the graph.
-    /// \todo Is this a good practice? I guess the "is-a"-relation of OO-programming is violated.
-    using Parent::addNode;
-    using Parent::addArc;
-    using Parent::erase;
-
-    /// \todo Change vector to map, so nodes can safely be added / removed when a forest is built.
-
-    /// \brief This vector contains all root nodes and is always sorted.
-    std::vector<Node> roots_;
-
-    /// \brief This vector contains all leaf nodes and is always sorted.
-    std::vector<Node> leaves_;
-};
-
-template <typename FOREST>
-OLDFixedForest0<FOREST>::OLDFixedForest0(
-        const Parent & graph
-)   : Parent(graph)
-{
-    Arc arc;
-    for (NodeIt it(*this); it != lemon::INVALID; ++it)
-    {
-        this->firstIn(arc, it);
-        if (!this->valid(arc))
-            roots_.push_back(it);
-        this->firstOut(arc, it);
-        if (!this->valid(arc))
-            leaves_.push_back(it);
-    }
-    std::sort(roots_.begin(), roots_.end());
-    std::sort(leaves_.begin(), leaves_.end());
-}
-
-template <typename FOREST>
-typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::roots_cbegin() const
-{
-    return roots_.cbegin();
-}
-
-template <typename FOREST>
-typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::roots_cend() const
-{
-    return roots_.cend();
-}
-
-template <typename FOREST>
-typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::leaves_cbegin() const
-{
-    return leaves_.cbegin();
-}
-
-template <typename FOREST>
-typename OLDFixedForest0<FOREST>::const_node_iterator OLDFixedForest0<FOREST>::leaves_cend() const
-{
-    return leaves_.cend();
-}
 
 } // namespace vigra
 
