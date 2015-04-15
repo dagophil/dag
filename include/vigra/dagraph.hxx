@@ -4,7 +4,7 @@
 #include <vector>
 #include <utility>
 #include <unordered_set>
-#include <map>
+#include <unordered_map>
 
 #include <vigra/graphs.hxx>  // for lemon::INVALID
 
@@ -584,6 +584,21 @@ namespace detail
         Arc arc_;
     };
 
+    /// \brief Hash functor for unordered_set<Node>.
+    template <class NODE>
+    struct NodeHash
+    {
+    public:
+        typedef NODE Node;
+        typedef typename Node::index_type index_type;
+        size_t operator()(Node const & node) const
+        {
+            return h_(node.id());
+        }
+    protected:
+        std::hash<index_type> h_;
+    };
+
 } // namespace detail
 
 
@@ -607,13 +622,15 @@ public:
     typedef detail::SubItemIt<DAGraph0, detail::ParentItFunctor<DAGraph0> > ParentIt;
     typedef detail::SubItemIt<DAGraph0, detail::ChildItFunctor<DAGraph0> > ChildIt;
 
-    template <typename VALUETYPE>
-    struct PropertyMap
-    {
-        typedef std::map<Node, VALUETYPE> type;
-    };
+//    template <typename VALUETYPE>
+//    struct PropertyMap
+//    {
+//        typedef std::map<Node, VALUETYPE> type;
+//    };
 //    template <typename VALUETYPE>
 //    using PropertyMap = std::map<Node, VALUETYPE>;
+    template <typename VALUETYPE>
+    using PropertyMap = std::unordered_map<Node, VALUETYPE, detail::NodeHash<Node> >;
 
     DAGraph0();
 
@@ -1033,22 +1050,6 @@ inline bool DAGraph0::isLeafNode(
 
 
 
-/// \brief Hash functor for unordered_set<Node>.
-template <class NODE>
-struct NodeHash
-{
-public:
-    typedef NODE Node;
-    size_t operator()(Node const & node) const
-    {
-        return h_(node.id());
-    }
-protected:
-    std::hash<int> h_;
-};
-
-
-
 /// \brief The Forest1 class extends a graph by some rootnode and parent functions. Building Forest1 is slower than building Forest0, but the Forest1 iterators are faster.
 template <typename GRAPH>
 class Forest1 : public GRAPH
@@ -1060,7 +1061,7 @@ public:
     typedef typename Parent::Arc Arc;
     typedef typename Parent::ParentIt ParentIt;
     typedef typename Parent::ChildIt ChildIt;
-    typedef std::unordered_set<Node, NodeHash<Node> > ContainerType;
+    typedef std::unordered_set<Node, detail::NodeHash<Node> > ContainerType;
     typedef typename ContainerType::const_iterator const_iterator;
     typedef detail::ItemIt<Forest1, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
     typedef detail::ItemIt<Forest1, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
