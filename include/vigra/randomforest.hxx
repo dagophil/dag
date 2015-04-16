@@ -2,11 +2,10 @@
 #define VIGRA_RANDOMFOREST_HXX
 
 #include <vigra/multi_array.hxx>
+#include <vigra/random.hxx>
 #include <queue>
 
 #include "dagraph.hxx"
-
-// TODO: Avoid naming conflicts in classes and file names.
 
 namespace vigra
 {
@@ -21,6 +20,38 @@ namespace detail
         Iter begin;
         Iter end;
     };
+
+    /// \brief Draw n samples from [begin, end) with replacement.
+    template <typename ITER, typename OUTITER>
+    void sample_with_replacement(size_t n, ITER begin, ITER end, OUTITER out)
+    {
+        size_t num_instances = std::distance(begin, end);
+        UniformIntRandomFunctor<MersenneTwister> rand;
+        for (size_t i = 0; i < n; ++i)
+        {
+            size_t k = rand() % num_instances;
+            *out = begin[k];
+            ++out;
+        }
+    }
+
+    /// \brief Draw n samples from [begin, end) without replacement.
+    template <typename ITER, typename OUTITER>
+    void sample_without_replacement(size_t n, ITER begin, ITER end, OUTITER out)
+    {
+        typedef typename std::iterator_traits<ITER>::value_type ValueType;
+
+        size_t num_instances = std::distance(begin, end);
+        std::vector<ValueType> values(begin, end);
+        UniformIntRandomFunctor<MersenneTwister> rand;
+        for (size_t i = 0; i < n; ++i)
+        {
+            size_t k = rand() % (num_instances-i);
+            *out = values[k];
+            ++out;
+            values[k] = values[num_instances-i-1];
+        }
+    }
 }
 
 template <typename T>
@@ -163,9 +194,11 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
 
     Iter begin = instance_ranges_[node].begin;
     Iter end = instance_ranges_[node].end;
+    size_t num_instances = std::distance(begin, end);
 
+    // TODO: Remove output.
     std::cout << "splitting node " << node << " with "
-              << std::distance(begin, end) << " instances" << std::endl;
+              << num_instances << " instances" << std::endl;
 
     // Check whether the given node is pure.
     {
@@ -189,10 +222,14 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
         }
     }
 
+    // Draw the bootstrap sample indices.
+    std::vector<size_t> sample_indices;
+    sample_indices.reserve(num_instances);
+    detail::sample_with_replacement(num_instances, begin, end, std::back_inserter(sample_indices));
 
-
-
-
+    // TODO: Get a random subset of the features.
+    // TODO: Find the best split.
+    // TODO: Put instances into child nodes (according to best split). (Use std::partition and update the instance_ranges_ property map.)
 }
 
 template <typename FOREST, typename FEATURES, typename LABELS>
