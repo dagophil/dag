@@ -10,6 +10,10 @@ void test_randomforest0()
 {
     using namespace vigra;
 
+    typedef Forest1<DAGraph0> Forest;
+    typedef FeatureGetter<float> Features;
+    typedef LabelGetter<UInt8> Labels;
+
     // Load some data.
     std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
     std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
@@ -31,9 +35,10 @@ void test_randomforest0()
     readHDF5(info, test_y);
 
     // Train a random forest.
-    RandomForest0<Forest1<DAGraph0> > rf;
-    FeatureGetter<float> train_feats(train_x);
-    rf.train(train_feats, train_y, 20);
+    RandomForest0<Forest, Features, Labels> rf;
+    Features train_feats(train_x);
+    Labels train_labels(train_y);
+    rf.train(train_feats, train_labels, 1);
 
     std::cout << "test_randomforest0(): Success!" << std::endl;
 }
