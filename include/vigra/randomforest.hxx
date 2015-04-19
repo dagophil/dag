@@ -13,13 +13,22 @@ namespace vigra
 
 namespace detail
 {
-    template <class ITER>
+    template <typename ITER>
     struct IterRange
     {
     public:
         typedef ITER Iter;
         Iter begin;
         Iter end;
+    };
+
+    template <typename FEATURETYPE>
+    struct Split
+    {
+    public:
+        typedef FEATURETYPE FeatureType;
+        size_t feature_index;
+        FeatureType thresh;
     };
 
     /// \brief Draw n samples from [begin, end) with replacement.
@@ -187,25 +196,6 @@ public:
         return arr_.size();
     }
 
-//    iterator begin()
-//    {
-//        return arr_.begin();
-//    }
-
-//    const_iterator begin() const
-//    {
-//        return arr_.begin();
-//    }
-
-//    iterator end()
-//    {
-//        return arr_.end();
-//    }
-
-//    const_iterator end() const
-//    {
-//        return arr_.end();
-//    }
 protected:
     MultiArrayView<1, T> const & arr_;
 };
@@ -241,13 +231,21 @@ public:
             size_t num_trees
     );
 
+    /// \brief Predict new data using the forest.
+    void predict(
+            FEATURES const & test_x,
+            MultiArrayView<1, LabelType> & train_y
+    ) const;
+
     /// \brief Split the given node and return the children. If no split was performed, n0 and n1 are invalid.
+    /// \param tree_index: Index of the tree in the tree vector.
     /// \param node: The node that will be split.
     /// \param data_x: The features.
     /// \param data_y: The labels.
     /// \param[out] n0: The first child node.
     /// \param[out] n1: The second child node.
     void split(
+            size_t tree_index,
             Node const & node,
             FEATURES const & data_x,
             LABELS const & data_y,
@@ -257,11 +255,16 @@ public:
 
 protected:
 
-    /// \brief The forest structure.
-    Forest forest_;
+    // TODO: Use a struct that can hold a tree and its property maps.
 
-    /// \brief A property map with the labels of each pure node.
-    PropertyMap<LabelType> labels_;
+    /// \brief The forest.
+    std::vector<Forest> trees_;
+
+    /// \brief Property maps with the node labels for each tree.
+    std::vector<PropertyMap<LabelType> > node_labels_;
+
+    /// \brief Property maps with the node splits for each tree.
+    std::vector<PropertyMap<detail::Split<FeatureType> > > node_splits_;
 
 private:
 
@@ -270,20 +273,22 @@ private:
     /// \brief Each tree has its instances saved in one of these vectors.
     std::vector<std::vector<size_t> > instance_indices_;
 
-    /// \brief For each node, this map contains iterators to begin and end of the instances (instance_indices_).
-    PropertyMap<Range> instance_ranges_;
+    /// \brief Property maps with begin and end of the instances (instance_indices_) for each node in each tree.
+    std::vector<PropertyMap<Range> > tree_instance_ranges_;
 };
 
 template <typename FOREST, typename FEATURES, typename LABELS>
 void RandomForest0<FOREST, FEATURES, LABELS>::split(
+        size_t tree_index,
         Node const & node,
         FEATURES const & data_x,
         LABELS const & data_y,
         Node & n0,
         Node & n1
 ){
-    auto const begin = instance_ranges_[node].begin;
-    auto const end = instance_ranges_[node].end;
+    auto & instance_ranges = tree_instance_ranges_[tree_index];
+    auto const begin = instance_ranges[node].begin;
+    auto const end = instance_ranges[node].end;
     auto const num_instances = std::distance(begin, end);
 
 //    // TODO: Remove output.
@@ -309,8 +314,9 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
         }
         if (is_pure)
         {
-            std::cout << "added leaf with " << num_instances << " instances" << std::endl;
-            labels_[node] = first_label;
+//            // TODO: Remove output.
+//            std::cout << "added leaf with " << num_instances << " instances" << std::endl;
+            node_labels_[tree_index][node] = first_label;
             n0 = lemon::INVALID;
             n1 = lemon::INVALID;
             return;
@@ -403,16 +409,17 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
                 return best_features[instance_index] < best_split;
             }
     );
-    n0 = forest_.addNode();
-    n1 = forest_.addNode();
-    forest_.addArc(node, n0);
-    forest_.addArc(node, n1);
+    auto & tree = trees_[tree_index];
+    n0 = tree.addNode();
+    n1 = tree.addNode();
+    tree.addArc(node, n0);
+    tree.addArc(node, n1);
+    instance_ranges[n0] = {begin, split_iter};
+    instance_ranges[n1] = {split_iter, end};
+    node_splits_[tree_index][node] = {best_feat, best_split};
 
-    instance_ranges_[n0] = {begin, split_iter};
-    instance_ranges_[n1] = {split_iter, end};
-
-    // TODO: Remove output.
-    std::cout << "divided into " << std::distance(begin, split_iter) << " and " << std::distance(split_iter, end) << std::endl;
+//    // TODO: Remove output.
+//    std::cout << "divided into " << std::distance(begin, split_iter) << " and " << std::distance(split_iter, end) << std::endl;
 }
 
 template <typename FOREST, typename FEATURES, typename LABELS>
@@ -421,12 +428,16 @@ void RandomForest0<FOREST, FEATURES, LABELS>::train(
         LABELS const & data_y,
         size_t num_trees
 ){
+    trees_.resize(num_trees);
     instance_indices_.resize(num_trees);
-
-    std::queue<Node> node_queue;
+    node_labels_.resize(num_trees);
+    node_splits_.resize(num_trees);
+    tree_instance_ranges_.resize(num_trees);
 
     for (size_t i = 0; i < num_trees; ++i)
     {
+        std::queue<Node> node_queue;
+
         // Draw the bootstrap indices.
         std::vector<size_t> index_vector;
         index_vector.reserve(data_x.num_instances());
@@ -441,22 +452,52 @@ void RandomForest0<FOREST, FEATURES, LABELS>::train(
         );
 
         // Add a new node to the graph and assign the bootstrap indices.
-        auto const rootnode = forest_.addNode();
-        instance_ranges_[rootnode] = {instance_indices_[i].begin(), instance_indices_[i].end()};
+        auto & tree = trees_[i];
+        auto const rootnode = tree.addNode();
+        auto & instance_ranges = tree_instance_ranges_[i];
+        instance_ranges[rootnode] = {instance_indices_[i].begin(), instance_indices_[i].end()};
         node_queue.push(rootnode);
+
+        // Split the nodes.
+        while (!node_queue.empty())
+        {
+            auto const node = node_queue.front();
+            node_queue.pop();
+
+            Node n0, n1;
+            split(i, node, data_x, data_y, n0, n1);
+            if (tree.valid(n0))
+                node_queue.push(n0);
+            if (tree.valid(n1))
+                node_queue.push(n1);
+        }
     }
+}
 
-    while (!node_queue.empty())
+template <typename FOREST, typename FEATURES, typename LABELS>
+void RandomForest0<FOREST, FEATURES, LABELS>::predict(
+        FEATURES const & test_x,
+        MultiArrayView<1, LabelType> & train_y
+) const {
+
+    typedef typename Forest::RootNodeIt RootNodeIt;
+
+    for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
-        auto const node = node_queue.front();
-        node_queue.pop();
+        auto const feats = test_x.instance_features(i);
 
-        Node n0, n1;
-        split(node, data_x, data_y, n0, n1);
-        if (forest_.valid(n0))
-            node_queue.push(n0);
-        if (forest_.valid(n1))
-            node_queue.push(n1);
+        for (auto const & tree : trees_)
+        {
+            RootNodeIt it(tree);
+            Node node(it);
+            vigra_assert(tree.valid(node), "RandomForest0::predict(): The tree has no root node.");
+
+            // TODO: Walk through the tree to a leaf node and get the node label.
+
+
+
+
+        }
     }
 }
 

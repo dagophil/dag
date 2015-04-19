@@ -70,11 +70,24 @@ void test_randomforest0()
         test_y.reshape(Shape1(info.shape().begin()));
         readHDF5(info, test_y);
 
+        // Only take a subset of the data.
+        size_t train_count = 500;
+        size_t test_count = 500;
+        auto const train_x_sub = train_x.subarray(Shape2(0, 0), Shape2(train_count, train_x.shape()[1]));
+        auto const train_y_sub = train_y.subarray(Shape1(0), Shape1(train_count));
+        auto const test_x_sub = test_x.subarray(Shape2(0, 0), Shape2(test_count, test_x.shape()[1]));
+        auto const test_y_sub = test_y.subarray(Shape1(0), Shape1(test_count));
+
         // Train a random forest.
         RandomForest0<Forest, Features, Labels> rf;
-        Features train_feats(train_x);
-        Labels train_labels(train_y);
+        Features train_feats(train_x_sub);
+        Labels train_labels(train_y_sub);
         rf.train(train_feats, train_labels, 1);
+
+        // Predict using the forest.
+        MultiArray<1, UInt8> pred_y(test_y_sub.shape());
+        Features test_feats(test_x_sub);
+        rf.predict(test_feats, pred_y);
     }
 
     std::cout << "test_randomforest0(): Success!" << std::endl;
