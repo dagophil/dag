@@ -53,6 +53,57 @@ namespace detail
             values[k] = values[num_instances-i-1];
         }
     }
+
+    /// \brief Functor for std::accumulate that can be used to add the values of a map.
+    template <typename KEY, typename VALUE>
+    struct MapValueAdder
+    {
+    public:
+        VALUE operator()(VALUE const & a, std::pair<KEY, VALUE> const & p) const
+        {
+            return a + p.second;
+        }
+    };
+
+    /// \brief Compute the gini impurity.
+    /// \param labels_left: Label counts of the left child.
+    /// \param label_priors: Total label count.
+    template <typename LABELTYPE, typename COUNTTYPE>
+    float gini_impurity(
+            std::map<LABELTYPE, COUNTTYPE> const & labels_left,
+            std::map<LABELTYPE, COUNTTYPE> const & label_priors
+    ){
+        typedef LABELTYPE LabelType;
+        typedef COUNTTYPE CountType;
+        typedef MapValueAdder<LabelType, CountType> Adder;
+
+        CountType const n_total = std::accumulate(
+                    label_priors.begin(),
+                    label_priors.end(),
+                    0,
+                    Adder()
+        );
+        CountType const n_left = std::accumulate(
+                    labels_left.begin(),
+                    labels_left.end(),
+                    0,
+                    Adder()
+        );
+        CountType const n_right = n_total - n_left;
+
+        float gini_left = 1;
+        float gini_right = 1;
+        for (auto const & p : labels_left)
+        {
+            auto const & label = p.first;
+            auto const & count = p.second;
+            float const p_left = count / static_cast<float>(n_left);
+            float const p_right = (label_priors.at(label) - count) / static_cast<float>(n_right);
+            gini_left -= (p_left*p_left);
+            gini_right -= (p_right*p_right);
+        }
+        return n_left*gini_left + n_right*gini_right;
+    }
 }
 
 /// \brief This class implements operator[] to return the feature vector of the requested instance.
@@ -267,13 +318,12 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
     }
 
     // Draw the bootstrap sample indices.
-    std::vector<size_t> sample_indices;
-    sample_indices.reserve(num_instances);
-    detail::sample_with_replacement(num_instances, begin, end, std::back_inserter(sample_indices));
+    std::vector<size_t> sample_indices(begin, end);
 
     // Get a random subset of the features.
     auto const num_feats = (size_t) std::ceil(std::sqrt(data_x.num_features()));
     std::vector<size_t> all_feat_indices;
+    all_feat_indices.reserve(data_x.num_features());
     for (size_t i = 0; i < data_x.num_features(); ++i)
         all_feat_indices.push_back(i);
     std::vector<size_t> feat_indices;
@@ -296,47 +346,51 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
     size_t best_feat = 0;
     FeatureType best_split = 0;
     float best_gini = std::numeric_limits<float>::max();
-    for (auto const feat : feat_indices)
+    for (auto const & feat : feat_indices)
     {
-        // This map counts the labels of the instances that lie in the left child.
+        // Sort the instances according to the current feature.
+        auto const features_multiarray = data_x.get_features(feat);
+        std::sort(sample_indices.begin(), sample_indices.end(),
+                [& features_multiarray](size_t a, size_t b){
+                    return features_multiarray[a] < features_multiarray[b];
+                }
+        );
+
+        // Compute the splits.
+        std::vector<FeatureType> splits;
+        for (size_t i = 0; i+1 < sample_indices.size(); ++i)
+        {
+            auto const & f0 = features_multiarray[sample_indices[i]];
+            auto const & f1 = features_multiarray[sample_indices[i+1]];
+            if (f0 != f1)
+                splits.push_back((f0+f1)/2);
+        }
+
+        // This map keeps track of the labels of instances in the left child.
         std::map<LabelType, size_t> labels_left;
 
-        // Sort the instances according to feature feat.
-        auto const features_multiarray = data_x.get_features(feat);
-        std::vector<std::pair<FeatureType, size_t> > features;
-        features.reserve(sample_indices.size());
-        for (size_t i = 0; i < sample_indices.size(); ++i)
-            features.push_back({features_multiarray[sample_indices[i]], sample_indices[i]});
-        std::sort(features.begin(), features.end());
-
-        for (size_t i = 0; i+1 < features.size(); ++i)
+        size_t first_right_index = 0;
+        for (auto const & s : splits)
         {
-            // Add the new label to the left child.
-            LabelType const new_label = data_y[features[i].second];
-            auto it = labels_left.find(new_label);
-            if (it == labels_left.end())
-                labels_left[new_label] = 1;
-            else
-                ++(it->second);
-
-            // Compute the gini impurity.
-            float gini_left = 1;
-            float gini_right = 1;
-            float const n_left = i+1;
-            float const n_right = features.size()-n_left;
-            for (auto const & p : labels_left)
+            // Add the new labels to the left child.
+            do
             {
-                float p_left = p.second / n_left;
-                float p_right = (label_priors[p.first] - p.second) / n_right;
-                gini_left -= (p_left*p_left);
-                gini_right -= (p_right*p_right);
+                LabelType const & new_label = data_y[sample_indices[first_right_index]];
+                auto const it = labels_left.find(new_label);
+                if (it == labels_left.end())
+                    labels_left[new_label] = 1;
+                else
+                    ++(it->second);
+                ++first_right_index;
             }
-            float const gini = n_left * gini_left + n_right * gini_right;
+            while (features_multiarray[sample_indices[first_right_index]] < s);
 
+            // Compute the gini.
+            float const gini = detail::gini_impurity(labels_left, label_priors);
             if (gini < best_gini)
             {
                 best_gini = gini;
-                best_split = (features[i].first + features[i+1].first) / 2;
+                best_split = s;
                 best_feat = feat;
             }
         }
@@ -356,6 +410,9 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
 
     instance_ranges_[n0] = {begin, split_iter};
     instance_ranges_[n1] = {split_iter, end};
+
+    // TODO: Remove output.
+    std::cout << "divided into " << std::distance(begin, split_iter) << " and " << std::distance(split_iter, end) << std::endl;
 }
 
 template <typename FOREST, typename FEATURES, typename LABELS>
@@ -370,14 +427,22 @@ void RandomForest0<FOREST, FEATURES, LABELS>::train(
 
     for (size_t i = 0; i < num_trees; ++i)
     {
-        instance_indices_[i].reserve(data_x.num_instances());
+        // Draw the bootstrap indices.
+        std::vector<size_t> index_vector;
+        index_vector.reserve(data_x.num_instances());
         for (size_t k = 0; k < data_x.num_instances(); ++k)
-            instance_indices_[i].push_back(k);
-        // TODO: Can the loop be replaced with an equally efficient std::iota?
+            index_vector.push_back(k);
+        instance_indices_[i].reserve(data_x.num_instances());
+        detail::sample_with_replacement(
+                    data_x.num_instances(),
+                    index_vector.begin(),
+                    index_vector.end(),
+                    std::back_inserter(instance_indices_[i])
+        );
 
+        // Add a new node to the graph and assign the bootstrap indices.
         auto const rootnode = forest_.addNode();
         instance_ranges_[rootnode] = {instance_indices_[i].begin(), instance_indices_[i].end()};
-
         node_queue.push(rootnode);
     }
 
