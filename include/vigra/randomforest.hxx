@@ -214,6 +214,7 @@ public:
     typedef typename Features::value_type FeatureType;
     typedef LABELS Labels;
     typedef typename Labels::value_type LabelType;
+    typedef detail::Split<FeatureType> Split;
 
     template <typename T>
     using PropertyMap = typename Forest::template PropertyMap<T>;
@@ -239,7 +240,7 @@ public:
     /// \brief Predict new data using the forest.
     void predict(
             FEATURES const & test_x,
-            MultiArrayView<1, LabelType> & train_y
+            MultiArrayView<1, LabelType> & pred_y
     ) const;
 
 protected:
@@ -265,7 +266,10 @@ protected:
     PropertyMap<LabelType> node_labels_;
 
     /// \brief The split of each node.
-    PropertyMap<detail::Split<FeatureType> > node_splits_;
+    PropertyMap<Split> node_splits_;
+
+    /// \brief Whether the node is a left or a right child.
+    PropertyMap<bool> is_left_node;
 
 private:
 
@@ -314,12 +318,37 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::train(
 template <typename FOREST, typename FEATURES, typename LABELS>
 void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
         FEATURES const & test_x,
-        MultiArrayView<1, LabelType> & train_y
+        MultiArrayView<1, LabelType> & pred_y
 ) const {
-    // TODO: Implement.
 
+    typedef typename Forest::RootNodeIt RootNodeIt;
+    typedef typename Forest::ChildIt ChildIt;
 
+    Node rootnode = RootNodeIt(tree_);
+    vigra_assert(tree_.valid(rootnode), "DecisionTree0::predict(): The graph has no root node.");
 
+    for (size_t i = 0; i < test_x.num_instances(); ++i)
+    {
+        auto const feats = test_x.instance_features(i);
+        Node node = rootnode;
+
+        while (!tree_.isLeafNode(node))
+        {
+             auto const & s = node_splits_.at(node);
+             bool go_left = feats[s.feature_index] < s.thresh;
+
+             for (ChildIt it(tree_, node); it != lemon::INVALID; ++it)
+             {
+                 auto const tmp = Node(it);
+                 if ((go_left && is_left_node.at(tmp)) || (!go_left && !is_left_node.at(tmp)))
+                 {
+                     node = tmp;
+                     break;
+                 }
+             }
+        }
+        pred_y[i] = node_labels_.at(node);
+    }
 }
 
 template <typename FOREST, typename FEATURES, typename LABELS>
@@ -370,7 +399,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     std::vector<size_t> sample_indices(begin, end);
 
     // Get a random subset of the features.
-    auto const num_feats = (size_t) std::ceil(std::sqrt(data_x.num_features()));
+    size_t const num_feats = std::ceil(std::sqrt(data_x.num_features()));
     std::vector<size_t> all_feat_indices;
     all_feat_indices.reserve(data_x.num_features());
     for (size_t i = 0; i < data_x.num_features(); ++i)
@@ -459,6 +488,8 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     tree_.addArc(node, n1);
     instance_ranges_[n0] = {begin, split_iter};
     instance_ranges_[n1] = {split_iter, end};
+    is_left_node[n0] = true;
+    is_left_node[n1] = false;
     node_splits_[node] = {best_feat, best_split};
 
 //    // TODO: Remove output.
@@ -501,7 +532,7 @@ public:
     /// \brief Predict new data using the forest.
     void predict(
             FEATURES const & test_x,
-            MultiArrayView<1, LabelType> & train_y
+            MultiArrayView<1, LabelType> & pred_y
     ) const;
 
 protected:
@@ -544,33 +575,47 @@ void RandomForest0<FEATURES, LABELS>::train(
 template <typename FEATURES, typename LABELS>
 void RandomForest0<FEATURES, LABELS>::predict(
         FEATURES const & test_x,
-        MultiArrayView<1, LabelType> & train_y
+        MultiArrayView<1, LabelType> & pred_y
 ) const {
-    // TODO: Implement.
 
+    // Let each tree predict all instances.
+    MultiArray<2, LabelType> labels(Shape2(test_x.num_instances(), dtrees_.size()));
+    for (size_t i = 0; i < dtrees_.size(); ++i)
+    {
+        auto label_view = labels.template bind<1>(i);
+        dtrees_[i].predict(test_x, label_view);
+    }
 
-
-/*
-    typedef typename Forest::RootNodeIt RootNodeIt;
-
+    // Find the majority vote.
     for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
-        auto const feats = test_x.instance_features(i);
-
-        for (auto const & tree : trees_)
+        // Count the labels.
+        std::map<LabelType, size_t> label_counts;
+        for (size_t k = 0; k < dtrees_.size(); ++k)
         {
-            RootNodeIt it(tree);
-            Node node(it);
-            vigra_assert(tree.valid(node), "RandomForest0::predict(): The tree has no root node.");
-
-            // TODO: Walk through the tree to a leaf node and get the node label.
-
-
-
-
+            LabelType const label = labels[Shape2(i, k)];
+            auto it = label_counts.find(label);
+            if (it == label_counts.end())
+                label_counts[label] = 1;
+            else
+                ++(it->second);
         }
+
+        // Find the label with the maximum count.
+        size_t max_count = 0;
+        LabelType max_label;
+        for (auto const & p : label_counts)
+        {
+            if (p.second > max_count)
+            {
+                max_count = p.second;
+                max_label = p.first;
+            }
+        }
+
+        // Write the label in the output array.
+        pred_y[i] = max_label;
     }
-*/
 }
 
 
