@@ -10,7 +10,6 @@ void test_randomforest0()
 {
     using namespace vigra;
 
-//    typedef Forest1<DAGraph0> Forest;
     typedef FeatureGetter<float> Features;
     typedef LabelGetter<UInt8> Labels;
 
@@ -70,24 +69,78 @@ void test_randomforest0()
         test_y.reshape(Shape1(info.shape().begin()));
         readHDF5(info, test_y);
 
-        // Only take a subset of the data.
-        size_t train_count = 500;
-        size_t test_count = 500;
-        auto const train_x_sub = train_x.subarray(Shape2(0, 0), Shape2(train_count, train_x.shape()[1]));
-        auto const train_y_sub = train_y.subarray(Shape1(0), Shape1(train_count));
-        auto const test_x_sub = test_x.subarray(Shape2(0, 0), Shape2(test_count, test_x.shape()[1]));
-        auto const test_y_sub = test_y.subarray(Shape1(0), Shape1(test_count));
+        // Only look at threes and eights.
+        std::vector<size_t> train_indices;
+        for (size_t i = 0; i < train_y.size(); ++i)
+        {
+            if (train_y[i] == 3 || train_y[i] == 8)
+                train_indices.push_back(i);
+        }
+        MultiArray<2, float> train_x_sub(Shape2(train_indices.size(), train_x.shape()[1]));
+        MultiArray<1, UInt8> train_y_sub(Shape1(train_indices.size()));
+        for (size_t i = 0; i < train_indices.size(); ++i)
+        {
+            for (size_t k = 0; k < train_x.shape()[1]; ++k)
+            {
+                train_x_sub[Shape2(i, k)] = train_x[Shape2(train_indices[i], k)];
+                train_y_sub[i] = train_y[train_indices[i]];
+            }
+        }
+        std::vector<size_t> test_indices;
+        for (size_t i = 0; i < test_y.size(); ++i)
+        {
+            if (test_y[i] == 3 || test_y[i] == 8)
+                test_indices.push_back(i);
+        }
+        MultiArray<2, float> test_x_sub(Shape2(test_indices.size(), test_x.shape()[1]));
+        MultiArray<1, UInt8> test_y_sub(Shape1(test_indices.size()));
+        for (size_t i = 0; i < test_indices.size(); ++i)
+        {
+            for (size_t k = 0; k < test_x.shape()[1]; ++k)
+            {
+                test_x_sub[Shape2(i, k)] = test_x[Shape2(test_indices[i], k)];
+                test_y_sub[i] = test_y[test_indices[i]];
+            }
+        }
+
+        /*
+        // Old implementation.
+        vigra::RandomForestOptions RFOPTIONS;
+        RFOPTIONS.tree_count(100);
+        vigra::RandomForest<> RF(RFOPTIONS);
+        MultiArrayView<2, UInt8> train_y_subb(Shape2(train_y_sub.size(), 1), train_y_sub.data());
+        RF.learn(train_x_sub, train_y_subb);
+        MultiArray<2, UInt8> pred_yy(Shape2(test_y_sub.size(), 1));
+        RF.predictLabels(test_x_sub, pred_yy);
+        size_t countt = 0;
+        for (size_t i = 0; i < test_y_sub.size(); ++i)
+        {
+            if (pred_yy[i] == test_y_sub[i])
+                ++countt;
+        }
+        std::cout << "Performance: " << (countt / ((float) pred_yy.size())) << " (" << countt << " of " << pred_yy.size() << ")" << std::endl;
+        */
 
         // Train a random forest.
         RandomForest0<Features, Labels> rf;
         Features train_feats(train_x_sub);
         Labels train_labels(train_y_sub);
-        rf.train(train_feats, train_labels, 1);
+        rf.train(train_feats, train_labels, 100);
 
         // Predict using the forest.
         MultiArray<1, UInt8> pred_y(test_y_sub.shape());
         Features test_feats(test_x_sub);
         rf.predict(test_feats, pred_y);
+
+        // Count the correct predicted instances.
+        size_t count = 0;
+        for (size_t i = 0; i < test_y_sub.size(); ++i)
+        {
+            if (pred_y[i] == test_y_sub[i])
+                ++count;
+        }
+        std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+
     }
 
     std::cout << "test_randomforest0(): Success!" << std::endl;

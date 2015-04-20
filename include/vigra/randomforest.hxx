@@ -77,37 +77,31 @@ namespace detail
     /// \brief Compute the gini impurity.
     /// \param labels_left: Label counts of the left child.
     /// \param label_priors: Total label count.
-    template <typename LABELTYPE, typename COUNTTYPE>
+    template <typename COUNTTYPE>
     float gini_impurity(
-            std::map<LABELTYPE, COUNTTYPE> const & labels_left,
-            std::map<LABELTYPE, COUNTTYPE> const & label_priors
+            std::vector<COUNTTYPE> const & labels_left,
+            std::vector<COUNTTYPE> const & label_priors
     ){
-        typedef LABELTYPE LabelType;
         typedef COUNTTYPE CountType;
-        typedef MapValueAdder<LabelType, CountType> Adder;
 
         CountType const n_total = std::accumulate(
                     label_priors.begin(),
                     label_priors.end(),
-                    0,
-                    Adder()
+                    0
         );
         CountType const n_left = std::accumulate(
                     labels_left.begin(),
                     labels_left.end(),
-                    0,
-                    Adder()
+                    0
         );
         CountType const n_right = n_total - n_left;
 
         float gini_left = 1;
         float gini_right = 1;
-        for (auto const & p : labels_left)
+        for (size_t i = 0; i < labels_left.size(); ++i)
         {
-            auto const & label = p.first;
-            auto const & count = p.second;
-            float const p_left = count / static_cast<float>(n_left);
-            float const p_right = (label_priors.at(label) - count) / static_cast<float>(n_right);
+            float const p_left = labels_left[i] / static_cast<float>(n_left);
+            float const p_right = (label_priors[i] - labels_left[i]) / static_cast<float>(n_right);
             gini_left -= (p_left*p_left);
             gini_right -= (p_right*p_right);
         }
@@ -121,6 +115,8 @@ class FeatureGetter
 {
 public:
     typedef T value_type;
+    typedef value_type & reference;
+    typedef value_type const & const_reference;
 
     FeatureGetter(MultiArrayView<2, T> const & arr)
         : arr_(arr)
@@ -161,6 +157,18 @@ public:
     {
         return arr_.shape()[1];
     }
+
+//    template <typename ACCESSOR>
+//    reference operator[](ACCESSOR const & x)
+//    {
+//        return arr_[x];
+//    }
+
+//    template <typename ACCESSOR>
+//    const_reference operator[](ACCESSOR const & x) const
+//    {
+//        return arr_[x];
+//    }
 
 protected:
     MultiArrayView<2, T> const & arr_;
@@ -273,7 +281,8 @@ protected:
 
 private:
 
-    typedef detail::IterRange<std::vector<size_t>::iterator> Range;
+    typedef std::vector<size_t>::iterator InstanceIterator;
+    typedef detail::IterRange<InstanceIterator> Range;
 
     /// \brief Vector with the instance indices.
     std::vector<size_t> instance_indices_;
@@ -359,9 +368,9 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         Node & n0,
         Node & n1
 ){
-    auto const begin = instance_ranges_[node].begin;
-    auto const end = instance_ranges_[node].end;
-    auto const num_instances = std::distance(begin, end);
+    auto const inst_begin = instance_ranges_[node].begin;
+    auto const inst_end = instance_ranges_[node].end;
+    auto const num_instances = std::distance(inst_begin, inst_end);
 
 //    // TODO: Remove output.
 //    std::cout << "splitting node " << node << " with "
@@ -373,9 +382,9 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         LabelType first_label = 0;
         if (num_instances > 1)
         {
-            auto it(begin);
+            auto it(inst_begin);
             first_label = data_y[*it];
-            for (++it; it != end; ++it)
+            for (++it; it != inst_end; ++it)
             {
                 if (data_y[*it] != first_label)
                 {
@@ -386,17 +395,12 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         }
         if (is_pure)
         {
-//            // TODO: Remove output.
-//            std::cout << "added leaf with " << num_instances << " instances" << std::endl;
             node_labels_[node] = first_label;
             n0 = lemon::INVALID;
             n1 = lemon::INVALID;
             return;
         }
     }
-
-    // TODO: Is this copy necessary? I guess you can directly use the vector instance_indices_.
-    std::vector<size_t> sample_indices(begin, end);
 
     // Get a random subset of the features.
     size_t const num_feats = std::ceil(std::sqrt(data_x.num_features()));
@@ -409,15 +413,14 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     detail::sample_without_replacement(num_feats, all_feat_indices.begin(), all_feat_indices.end(), std::back_inserter(feat_indices));
 
     // Compute the prior label count.
-    std::map<LabelType, size_t> label_priors;
-    for (size_t i = 0; i < sample_indices.size(); ++i)
+    // Note: A map would be more natural, but a vector offers faster access.
+    std::vector<size_t> label_priors;
+    for (InstanceIterator it(inst_begin); it != inst_end; ++it)
     {
-        LabelType const l = data_y[sample_indices[i]];
-        auto it = label_priors.find(l);
-        if (it == label_priors.end())
-            label_priors[l] = 1;
-        else
-            ++(it->second);
+        size_t const l = static_cast<size_t>(data_y[*it]);
+        if (l >= label_priors.size())
+            label_priors.resize(l+1);
+        ++label_priors[l];
     }
 
     // Find the best split.
@@ -428,24 +431,32 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     {
         // Sort the instances according to the current feature.
         auto const features_multiarray = data_x.get_features(feat);
-        std::sort(sample_indices.begin(), sample_indices.end(),
+        std::sort(inst_begin, inst_end,
                 [& features_multiarray](size_t a, size_t b){
                     return features_multiarray[a] < features_multiarray[b];
                 }
         );
 
+        // Sort the features likewise.
+        std::vector<FeatureType> features_vec;
+        features_vec.reserve(features_multiarray.size());
+        for (InstanceIterator it(inst_begin); it != inst_end; ++it)
+            features_vec.push_back(features_multiarray[*it]);
+
         // Compute the splits.
+        // TODO: Use split iterator.
         std::vector<FeatureType> splits;
-        for (size_t i = 0; i+1 < sample_indices.size(); ++i)
+        for (InstanceIterator it0(inst_begin), it1(inst_begin+1); it0 != inst_end && it1 != inst_end; ++it0, ++it1)
         {
-            auto const & f0 = features_multiarray[sample_indices[i]];
-            auto const & f1 = features_multiarray[sample_indices[i+1]];
+            auto const & f0 = features_multiarray[*it0];
+            auto const & f1 = features_multiarray[*it1];
             if (f0 != f1)
                 splits.push_back((f0+f1)/2);
         }
 
-        // This map keeps track of the labels of the instances that are assigned to the left child.
-        std::map<LabelType, size_t> labels_left;
+        // This vector keeps track of the labels of the instances that are assigned to the left child.
+        // Note: A map would be more natural, but a vector offers faster access.
+        std::vector<size_t> labels_left;
 
         // Compute the gini impurity of each split.
         size_t first_right_index = 0; // index of the first instance that is assigned to the right child
@@ -454,15 +465,13 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
             // Add the new labels to the left child.
             do
             {
-                LabelType const & new_label = data_y[sample_indices[first_right_index]];
-                auto const it = labels_left.find(new_label);
-                if (it == labels_left.end())
-                    labels_left[new_label] = 1;
-                else
-                    ++(it->second);
+                size_t const new_label = static_cast<size_t>(data_y[*(inst_begin+first_right_index)]);
+                if (new_label >= labels_left.size())
+                    labels_left.resize(new_label+1);
+                ++labels_left[new_label];
                 ++first_right_index;
             }
-            while (features_multiarray[sample_indices[first_right_index]] < s);
+            while (features_vec[first_right_index] < s);
 
             // Compute the gini.
             float const gini = detail::gini_impurity(labels_left, label_priors);
@@ -477,7 +486,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
 
     // Separate the data according to the best split.
     auto const best_features = data_x.get_features(best_feat);
-    auto const split_iter = std::partition(begin, end,
+    auto const split_iter = std::partition(inst_begin, inst_end,
             [&](size_t instance_index){
                 return best_features[instance_index] < best_split;
             }
@@ -486,8 +495,8 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     n1 = tree_.addNode();
     tree_.addArc(node, n0);
     tree_.addArc(node, n1);
-    instance_ranges_[n0] = {begin, split_iter};
-    instance_ranges_[n1] = {split_iter, end};
+    instance_ranges_[n0] = {inst_begin, split_iter};
+    instance_ranges_[n1] = {split_iter, inst_end};
     is_left_node[n0] = true;
     is_left_node[n1] = false;
     node_splits_[node] = {best_feat, best_split};
@@ -552,6 +561,9 @@ void RandomForest0<FEATURES, LABELS>::train(
 
     for (size_t i = 0; i < num_trees; ++i)
     {
+        // TODO: Remove output.
+        std::cout << "training tree " << i << std::endl;
+
         // Draw the bootstrap indices.
         std::vector<size_t> index_vector;
         index_vector.reserve(data_x.num_instances());
@@ -590,26 +602,24 @@ void RandomForest0<FEATURES, LABELS>::predict(
     for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
         // Count the labels.
-        std::map<LabelType, size_t> label_counts;
+        std::vector<size_t> label_counts_vec;
         for (size_t k = 0; k < dtrees_.size(); ++k)
         {
             LabelType const label = labels[Shape2(i, k)];
-            auto it = label_counts.find(label);
-            if (it == label_counts.end())
-                label_counts[label] = 1;
-            else
-                ++(it->second);
+            if (label >= label_counts_vec.size())
+                label_counts_vec.resize(label+1);
+            ++label_counts_vec[label];
         }
 
         // Find the label with the maximum count.
         size_t max_count = 0;
         LabelType max_label;
-        for (auto const & p : label_counts)
+        for (size_t k = 0; k < label_counts_vec.size(); ++k)
         {
-            if (p.second > max_count)
+            if (label_counts_vec[k] > max_count)
             {
-                max_count = p.second;
-                max_label = p.first;
+                max_count = label_counts_vec[k];
+                max_label = static_cast<LabelType>(k);
             }
         }
 
