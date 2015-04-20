@@ -10,7 +10,7 @@ void test_randomforest0()
 {
     using namespace vigra;
 
-    typedef Forest1<DAGraph0> Forest;
+//    typedef Forest1<DAGraph0> Forest;
     typedef FeatureGetter<float> Features;
     typedef LabelGetter<UInt8> Labels;
 
@@ -79,7 +79,7 @@ void test_randomforest0()
         auto const test_y_sub = test_y.subarray(Shape1(0), Shape1(test_count));
 
         // Train a random forest.
-        RandomForest0<Forest, Features, Labels> rf;
+        RandomForest0<Features, Labels> rf;
         Features train_feats(train_x_sub);
         Labels train_labels(train_y_sub);
         rf.train(train_feats, train_labels, 1);

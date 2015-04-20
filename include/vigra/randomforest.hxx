@@ -200,10 +200,11 @@ protected:
     MultiArrayView<1, T> const & arr_;
 };
 
-/// \brief Random forest class.
-/// \note FEATURES/LABELS must implement the operator[] that gets an instance index and returns the features/labels of that instance.
+
+
+/// \brief Simple decision tree class.
 template <typename FOREST, typename FEATURES, typename LABELS>
-class RandomForest0
+class DecisionTree0
 {
 public:
 
@@ -214,21 +215,25 @@ public:
     typedef LABELS Labels;
     typedef typename Labels::value_type LabelType;
 
-    template <typename VALUE_TYPE>
-    using PropertyMap = typename Forest::template PropertyMap<VALUE_TYPE>;
+    template <typename T>
+    using PropertyMap = typename Forest::template PropertyMap<T>;
 
-    RandomForest0() = default;
-    RandomForest0(RandomForest0 const &) = default;
-    RandomForest0(RandomForest0 &&) = default;
-    ~RandomForest0() = default;
-    RandomForest0 & operator=(RandomForest0 const &) = default;
-    RandomForest0 & operator=(RandomForest0 &&) = default;
+    /// \brief Initialize the tree with the given instance indices.
+    /// \param instance_indices: The indices of the instances in the feature matrix.
+    DecisionTree0(
+            std::vector<size_t> const & instance_indices
+    );
 
-    /// \brief Train the random forest.
+    DecisionTree0(DecisionTree0 const &) = default;
+    DecisionTree0(DecisionTree0 &&) = default;
+    ~DecisionTree0() = default;
+    DecisionTree0 & operator=(DecisionTree0 const &) = default;
+    DecisionTree0 & operator=(DecisionTree0 &&) = default;
+
+    /// \brief Train the decision tree.
     void train(
-            FEATURES const & train_x,
-            LABELS const & train_y,
-            size_t num_trees
+            FEATURES const & data_x,
+            LABELS const & data_y
     );
 
     /// \brief Predict new data using the forest.
@@ -237,15 +242,15 @@ public:
             MultiArrayView<1, LabelType> & train_y
     ) const;
 
-    /// \brief Split the given node and return the children. If no split was performed, n0 and n1 are invalid.
-    /// \param tree_index: Index of the tree in the tree vector.
+protected:
+
+    /// \brief Split the given node and return the children. If no split was performed, n0 and n1 are set to lemon::INVALID.
     /// \param node: The node that will be split.
     /// \param data_x: The features.
     /// \param data_y: The labels.
     /// \param[out] n0: The first child node.
     /// \param[out] n1: The second child node.
     void split(
-            size_t tree_index,
             Node const & node,
             FEATURES const & data_x,
             LABELS const & data_y,
@@ -253,42 +258,80 @@ public:
             Node & n1
     );
 
-protected:
+    /// \brief The graph structure.
+    Forest tree_;
 
-    // TODO: Use a struct that can hold a tree and its property maps.
+    /// \brief The node labels that were found in training.
+    PropertyMap<LabelType> node_labels_;
 
-    /// \brief The forest.
-    std::vector<Forest> trees_;
-
-    /// \brief Property maps with the node labels for each tree.
-    std::vector<PropertyMap<LabelType> > node_labels_;
-
-    /// \brief Property maps with the node splits for each tree.
-    std::vector<PropertyMap<detail::Split<FeatureType> > > node_splits_;
+    /// \brief The split of each node.
+    PropertyMap<detail::Split<FeatureType> > node_splits_;
 
 private:
 
     typedef detail::IterRange<std::vector<size_t>::iterator> Range;
 
-    /// \brief Each tree has its instances saved in one of these vectors.
-    std::vector<std::vector<size_t> > instance_indices_;
+    /// \brief Vector with the instance indices.
+    std::vector<size_t> instance_indices_;
 
-    /// \brief Property maps with begin and end of the instances (instance_indices_) for each node in each tree.
-    std::vector<PropertyMap<Range> > tree_instance_ranges_;
+    /// \brief The instances of each node (begin and end iterator in the vector instance_indices_).
+    PropertyMap<Range> instance_ranges_;
+
 };
 
 template <typename FOREST, typename FEATURES, typename LABELS>
-void RandomForest0<FOREST, FEATURES, LABELS>::split(
-        size_t tree_index,
+DecisionTree0<FOREST, FEATURES, LABELS>::DecisionTree0(
+        const std::vector<size_t> & instance_indices
+)   : instance_indices_(instance_indices)
+{}
+
+template <typename FOREST, typename FEATURES, typename LABELS>
+void DecisionTree0<FOREST, FEATURES, LABELS>::train(
+        FEATURES const & data_x,
+        LABELS const & data_y
+){
+    // Create the queue with the nodes to be split and place the root node with all instances inside.
+    std::queue<Node> node_queue;
+    auto const rootnode = tree_.addNode();
+    instance_ranges_[rootnode] = {instance_indices_.begin(), instance_indices_.end()};
+    node_queue.push(rootnode);
+
+    // Split the nodes.
+    while (!node_queue.empty())
+    {
+        auto const node = node_queue.front();
+        node_queue.pop();
+
+        Node n0, n1;
+        split(node, data_x, data_y, n0, n1);
+        if (tree_.valid(n0))
+            node_queue.push(n0);
+        if (tree_.valid(n1))
+            node_queue.push(n1);
+    }
+}
+
+template <typename FOREST, typename FEATURES, typename LABELS>
+void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
+        FEATURES const & test_x,
+        MultiArrayView<1, LabelType> & train_y
+) const {
+    // TODO: Implement.
+
+
+
+}
+
+template <typename FOREST, typename FEATURES, typename LABELS>
+void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         Node const & node,
         FEATURES const & data_x,
         LABELS const & data_y,
         Node & n0,
         Node & n1
 ){
-    auto & instance_ranges = tree_instance_ranges_[tree_index];
-    auto const begin = instance_ranges[node].begin;
-    auto const end = instance_ranges[node].end;
+    auto const begin = instance_ranges_[node].begin;
+    auto const end = instance_ranges_[node].end;
     auto const num_instances = std::distance(begin, end);
 
 //    // TODO: Remove output.
@@ -316,14 +359,14 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
         {
 //            // TODO: Remove output.
 //            std::cout << "added leaf with " << num_instances << " instances" << std::endl;
-            node_labels_[tree_index][node] = first_label;
+            node_labels_[node] = first_label;
             n0 = lemon::INVALID;
             n1 = lemon::INVALID;
             return;
         }
     }
 
-    // Draw the bootstrap sample indices.
+    // TODO: Is this copy necessary? I guess you can directly use the vector instance_indices_.
     std::vector<size_t> sample_indices(begin, end);
 
     // Get a random subset of the features.
@@ -372,10 +415,11 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
                 splits.push_back((f0+f1)/2);
         }
 
-        // This map keeps track of the labels of instances in the left child.
+        // This map keeps track of the labels of the instances that are assigned to the left child.
         std::map<LabelType, size_t> labels_left;
 
-        size_t first_right_index = 0;
+        // Compute the gini impurity of each split.
+        size_t first_right_index = 0; // index of the first instance that is assigned to the right child
         for (auto const & s : splits)
         {
             // Add the new labels to the left child.
@@ -409,77 +453,104 @@ void RandomForest0<FOREST, FEATURES, LABELS>::split(
                 return best_features[instance_index] < best_split;
             }
     );
-    auto & tree = trees_[tree_index];
-    n0 = tree.addNode();
-    n1 = tree.addNode();
-    tree.addArc(node, n0);
-    tree.addArc(node, n1);
-    instance_ranges[n0] = {begin, split_iter};
-    instance_ranges[n1] = {split_iter, end};
-    node_splits_[tree_index][node] = {best_feat, best_split};
+    n0 = tree_.addNode();
+    n1 = tree_.addNode();
+    tree_.addArc(node, n0);
+    tree_.addArc(node, n1);
+    instance_ranges_[n0] = {begin, split_iter};
+    instance_ranges_[n1] = {split_iter, end};
+    node_splits_[node] = {best_feat, best_split};
 
 //    // TODO: Remove output.
 //    std::cout << "divided into " << std::distance(begin, split_iter) << " and " << std::distance(split_iter, end) << std::endl;
 }
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-void RandomForest0<FOREST, FEATURES, LABELS>::train(
+
+
+/// \brief Random forest class.
+/// \note FEATURES/LABELS must implement the operator[] that gets an instance index and returns the features/labels of that instance.
+template <typename FEATURES, typename LABELS>
+class RandomForest0
+{
+public:
+
+    typedef vigra::Forest1<vigra::DAGraph0> Forest;
+    typedef Forest::Node Node;
+    typedef FEATURES Features;
+    typedef typename Features::value_type FeatureType;
+    typedef LABELS Labels;
+    typedef typename Labels::value_type LabelType;
+
+    template <typename VALUE_TYPE>
+    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
+
+    RandomForest0() = default;
+    RandomForest0(RandomForest0 const &) = default;
+    RandomForest0(RandomForest0 &&) = default;
+    ~RandomForest0() = default;
+    RandomForest0 & operator=(RandomForest0 const &) = default;
+    RandomForest0 & operator=(RandomForest0 &&) = default;
+
+    /// \brief Train the random forest.
+    void train(
+            FEATURES const & train_x,
+            LABELS const & train_y,
+            size_t num_trees
+    );
+
+    /// \brief Predict new data using the forest.
+    void predict(
+            FEATURES const & test_x,
+            MultiArrayView<1, LabelType> & train_y
+    ) const;
+
+protected:
+
+    /// \brief The trees of the forest.
+    std::vector<DecisionTree0<Forest, Features, Labels> > dtrees_;
+
+};
+
+template <typename FEATURES, typename LABELS>
+void RandomForest0<FEATURES, LABELS>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
         size_t num_trees
 ){
-    trees_.resize(num_trees);
-    instance_indices_.resize(num_trees);
-    node_labels_.resize(num_trees);
-    node_splits_.resize(num_trees);
-    tree_instance_ranges_.resize(num_trees);
+    dtrees_.reserve(num_trees);
 
     for (size_t i = 0; i < num_trees; ++i)
     {
-        std::queue<Node> node_queue;
-
         // Draw the bootstrap indices.
         std::vector<size_t> index_vector;
         index_vector.reserve(data_x.num_instances());
         for (size_t k = 0; k < data_x.num_instances(); ++k)
             index_vector.push_back(k);
-        instance_indices_[i].reserve(data_x.num_instances());
+        std::vector<size_t> instance_indices;
+        instance_indices.reserve(data_x.num_instances());
         detail::sample_with_replacement(
                     data_x.num_instances(),
                     index_vector.begin(),
                     index_vector.end(),
-                    std::back_inserter(instance_indices_[i])
+                    std::back_inserter(instance_indices)
         );
 
-        // Add a new node to the graph and assign the bootstrap indices.
-        auto & tree = trees_[i];
-        auto const rootnode = tree.addNode();
-        auto & instance_ranges = tree_instance_ranges_[i];
-        instance_ranges[rootnode] = {instance_indices_[i].begin(), instance_indices_[i].end()};
-        node_queue.push(rootnode);
-
-        // Split the nodes.
-        while (!node_queue.empty())
-        {
-            auto const node = node_queue.front();
-            node_queue.pop();
-
-            Node n0, n1;
-            split(i, node, data_x, data_y, n0, n1);
-            if (tree.valid(n0))
-                node_queue.push(n0);
-            if (tree.valid(n1))
-                node_queue.push(n1);
-        }
+        // Create the tree and train it.
+        dtrees_.push_back({instance_indices});
+        dtrees_.back().train(data_x, data_y);
     }
 }
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-void RandomForest0<FOREST, FEATURES, LABELS>::predict(
+template <typename FEATURES, typename LABELS>
+void RandomForest0<FEATURES, LABELS>::predict(
         FEATURES const & test_x,
         MultiArrayView<1, LabelType> & train_y
 ) const {
+    // TODO: Implement.
 
+
+
+/*
     typedef typename Forest::RootNodeIt RootNodeIt;
 
     for (size_t i = 0; i < test_x.num_instances(); ++i)
@@ -499,6 +570,7 @@ void RandomForest0<FOREST, FEATURES, LABELS>::predict(
 
         }
     }
+*/
 }
 
 
