@@ -47,6 +47,31 @@ void test_randomforest0()
         // TODO: Check that the output is random.
     }
 
+    // Test the split iterator.
+    {
+        typedef detail::SplitIterator<std::vector<float>::iterator> FloatSplitIter;
+        std::vector<float> v {1.f, 3.f, 3.f, 4.f, 4.f, 4.f, 8.f};
+        std::vector<float> splits_expected {2.f, 3.5f, 6.f};
+        std::vector<float> splits;
+        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
+            splits.push_back(*it);
+        vigra_assert(splits.size() == splits_expected.size(), "SplitIterator: Wrong number of splits.");
+        for (size_t i = 0; i < splits.size(); ++i)
+            vigra_assert(splits[i] == splits_expected[i], "SplitIterator: The splits are wrong.");
+
+        // Test border cases: Vector of size 0 and vecto of size 1.
+        v.clear();
+        splits_expected.clear();
+        splits.clear();
+        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
+            splits.push_back(*it);
+        vigra_assert(splits.size() == 0, "SplitIterator: Error on empty vector.");
+        v.push_back(1.f);
+        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
+            splits.push_back(*it);
+        vigra_assert(splits.size() == 0, "SplitIterator: Error on vector with size one.");
+    }
+
     // Build a random forest.
     {
         // Load some data.

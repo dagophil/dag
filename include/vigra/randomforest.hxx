@@ -3,6 +3,7 @@
 
 #include <vigra/multi_array.hxx>
 #include <vigra/random.hxx>
+#include <vigra/iteratorfacade.hxx>
 #include <queue>
 #include <map>
 
@@ -49,10 +50,10 @@ namespace detail
     template <typename ITER, typename OUTITER>
     void sample_without_replacement(size_t n, ITER begin, ITER end, OUTITER out)
     {
-        typedef typename std::iterator_traits<ITER>::value_type ValueType;
+        typedef typename std::iterator_traits<ITER>::value_type value_type;
 
         size_t num_instances = std::distance(begin, end);
-        std::vector<ValueType> values(begin, end);
+        std::vector<value_type> values(begin, end);
         UniformIntRandomFunctor<MersenneTwister> rand;
         for (size_t i = 0; i < n; ++i)
         {
@@ -107,6 +108,143 @@ namespace detail
         }
         return n_left*gini_left + n_right*gini_right;
     }
+
+    template <typename ITER>
+    class SplitIterator
+    {
+    public:
+
+        typedef typename std::iterator_traits<ITER>::value_type value_type;
+
+        SplitIterator(ITER const & begin, ITER const & end)
+            : current_(begin),
+              next_(std::next(begin)),
+              end_(end)
+        {
+            if (current_ == end_)
+                next_ = end_;
+            while (next_ != end_)
+            {
+                if (*next_ != *current_)
+                    break;
+                ++current_;
+                ++next_;
+            }
+        }
+
+        SplitIterator & operator++()
+        {
+            while (next_ != end_)
+            {
+                ++current_;
+                ++next_;
+                if (*next_ != *current_)
+                    break;
+            }
+        }
+
+        value_type operator*() const
+        {
+            return (*current_ + *next_) / 2;
+        }
+
+        bool operator==(SplitIterator const & other)
+        {
+            return next_ == other.next_;
+        }
+
+        bool operator==(ITER const & other)
+        {
+            return next_ == other;
+        }
+
+        bool operator!=(SplitIterator const & other)
+        {
+            return next_ != other.next_;
+        }
+
+        bool operator!=(ITER const & other)
+        {
+            return next_ != other;
+        }
+
+    protected:
+
+        ITER current_;
+        ITER next_;
+        ITER end_;
+
+    };
+
+//    /// \brief Iterate over in-between values of a container.
+//    /// \example Given a vector with the elements {1., 3., 3., 4., 4., 4., 8.}, the iterator would yield {2., 3.5, 6.}.
+//    /// \todo Write tests for the iterator.
+//    template <typename ITER>
+//    class SplitIterator : public ForwardIteratorFacade<SplitIterator<ITER>, typename std::iterator_traits<ITER>::value_type, true>
+//    {
+//    public:
+
+//        typedef typename std::iterator_traits<ITER>::value_type value_type;
+
+//        SplitIterator(lemon::Invalid const & inv = lemon::INVALID)
+//        {}
+
+//        SplitIterator(ITER const & begin, ITER const & end)
+//            : current_(begin),
+//              next_(std::next(begin)),
+//              end_(end)
+//        {
+//            while (current_ != end_ && next_ != end_)
+//            {
+//                if (*next_ != *current_)
+//                    break;
+//                ++current_;
+//                ++next_;
+//            }
+//        }
+
+//        bool operator==(ITER const & other) const
+//        {
+//            return next_ == other;
+//        }
+
+//        bool operator!=(ITER const & other) const
+//        {
+//            return next_ != other;
+//        }
+
+//    private:
+
+//        friend class vigra::IteratorFacadeCoreAccess;
+
+//        bool equal(
+//                SplitIterator const & other
+//        ) const {
+//            return next_ == other.current_;
+//        }
+
+//        void increment()
+//        {
+//            while (next_ != end_)
+//            {
+//                ++current_;
+//                ++next_;
+//                if (*next_ != *current_)
+//                    break;
+//            }
+//        }
+
+//        value_type dereference() const
+//        {
+//            return (*current_ + *next_) / 2;
+//        }
+
+//        ITER current_;
+//        ITER next_;
+//        ITER end_;
+
+//    };
+
 }
 
 /// \brief This class implements operator[] to return the feature vector of the requested instance.
