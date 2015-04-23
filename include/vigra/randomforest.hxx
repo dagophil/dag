@@ -581,25 +581,19 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         for (InstanceIterator it(inst_begin); it != inst_end; ++it)
             features_vec.push_back(features_multiarray[*it]);
 
-        // Compute the splits.
-        // TODO: Use split iterator.
-        std::vector<FeatureType> splits;
-        for (InstanceIterator it0(inst_begin), it1(inst_begin+1); it0 != inst_end && it1 != inst_end; ++it0, ++it1)
-        {
-            auto const & f0 = features_multiarray[*it0];
-            auto const & f1 = features_multiarray[*it1];
-            if (f0 != f1)
-                splits.push_back((f0+f1)/2);
-        }
-
         // This vector keeps track of the labels of the instances that are assigned to the left child.
         // Note: A map would be more natural, but a vector offers faster access.
         std::vector<size_t> labels_left;
 
         // Compute the gini impurity of each split.
         size_t first_right_index = 0; // index of the first instance that is assigned to the right child
-        for (auto const & s : splits)
+        for (size_t i = 0; i+1 < features_vec.size(); ++i)
         {
+            // Compute the split.
+            if (features_vec[i] == features_vec[i+1])
+                continue;
+            auto const s = (features_vec[i]+features_vec[i+1])/2;
+
             // Add the new labels to the left child.
             do
             {
