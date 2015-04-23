@@ -296,18 +296,6 @@ public:
         return arr_.shape()[1];
     }
 
-//    template <typename ACCESSOR>
-//    reference operator[](ACCESSOR const & x)
-//    {
-//        return arr_[x];
-//    }
-
-//    template <typename ACCESSOR>
-//    const_reference operator[](ACCESSOR const & x) const
-//    {
-//        return arr_[x];
-//    }
-
 protected:
     MultiArrayView<2, T> const & arr_;
 };
@@ -568,18 +556,12 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     for (auto const & feat : feat_indices)
     {
         // Sort the instances according to the current feature.
-        auto const features_multiarray = data_x.get_features(feat);
+        auto const features = data_x.get_features(feat);
         std::sort(inst_begin, inst_end,
-                [& features_multiarray](size_t a, size_t b){
-                    return features_multiarray[a] < features_multiarray[b];
+                [& features](size_t a, size_t b){
+                    return features[a] < features[b];
                 }
         );
-
-        // Sort the features likewise.
-        std::vector<FeatureType> features_vec;
-        features_vec.reserve(features_multiarray.size());
-        for (InstanceIterator it(inst_begin); it != inst_end; ++it)
-            features_vec.push_back(features_multiarray[*it]);
 
         // This vector keeps track of the labels of the instances that are assigned to the left child.
         // Note: A map would be more natural, but a vector offers faster access.
@@ -587,12 +569,14 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
 
         // Compute the gini impurity of each split.
         size_t first_right_index = 0; // index of the first instance that is assigned to the right child
-        for (size_t i = 0; i+1 < features_vec.size(); ++i)
+        for (size_t i = 0; i+1 < num_instances; ++i)
         {
             // Compute the split.
-            if (features_vec[i] == features_vec[i+1])
+            auto const left = features[*(inst_begin+i)];
+            auto const right = features[*(inst_begin+i+1)];
+            if (left == right)
                 continue;
-            auto const s = (features_vec[i]+features_vec[i+1])/2;
+            auto const s = (left+right)/2;
 
             // Add the new labels to the left child.
             do
@@ -603,7 +587,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
                 ++labels_left[new_label];
                 ++first_right_index;
             }
-            while (features_vec[first_right_index] < s);
+            while (features[*(inst_begin+first_right_index)] < s);
 
             // Compute the gini.
             float const gini = detail::gini_impurity(labels_left, label_priors);
