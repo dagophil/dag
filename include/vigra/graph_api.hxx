@@ -1,6 +1,8 @@
 #ifndef VIGRA_GRAPH_API_HXX
 #define VIGRA_GRAPH_API_HXX
 
+#include <vigra/graphs.hxx>
+
 namespace vigra
 {
 
@@ -19,14 +21,16 @@ namespace detail
      * finds the appropriate data.
      *
      * Two nodes are considered to be equal if the ids are equal.
-     *
-     * \todo Decide whether to template the id type.
      */
+    template <typename ID>
     class Node
     {
     public:
-        int id();
-        void set_id(int id);
+        typedef ID index_type;
+        Node(lemon::Invalid = lemon::INVALID);
+        Node(index_type const & id);
+        index_type id();
+        void set_id(index_type const & id);
         bool operator!=(Node const & other);
         bool operator==(Node const & other);
     };
@@ -39,14 +43,16 @@ namespace detail
      * finds the appropriate data.
      *
      * Two arcs are considered to be equal if the ids are equal.
-     *
-     * \todo Decide whether to template the id type.
      */
+    template <typename ID>
     class Arc
     {
     public:
-        int id();
-        void set_id(int id);
+        typedef ID index_type;
+        Arc(lemon::Invalid = lemon::INVALID);
+        Arc(index_type const & id);
+        index_type id();
+        void set_id(index_type const & id);
         bool operator!=(Arc const & other);
         bool operator==(Arc const & other);
     };
@@ -191,12 +197,16 @@ namespace detail
 
 } // namespace IterGraphDetail
 
+/**
+ * \brief The IterGraph class.
+ */
+template <typename ID = int>
 class IterGraph
 {
 public:
-
-    typedef detail::Node Node;
-    typedef detail::Arc Arc;
+    typedef ID index_type;
+    typedef detail::Node<index_type> Node;
+    typedef detail::Arc<index_type> Arc;
     typedef detail::NodeIt NodeIt;
     typedef detail::ArcIt ArcIt;
     typedef detail::OutArcIt OutArcIt;
@@ -241,6 +251,64 @@ private:
     void operator=(IterGraph const &);
 
 };
+
+/**
+ * \brief The RandomAccessGraph class.
+ *
+ * \note Even though it is not fully listed here, all of the IterGraph API is supported.
+ *
+ * \todo Once the IterGraph API is complete, list all of it here.
+ */
+template <typename ID = int>
+class RandomAccessGraph
+{
+public:
+
+    typedef ID index_type;
+    typedef detail::Node<index_type> Node;
+    typedef detail::Arc<index_type> Arc;
+
+    /// \brief Return the number of nodes.
+    size_t numNodes() const;
+
+    /// \brief Return the number of arcs.
+    size_t numArcs() const;
+
+    /// \brief Return the number of outgoing arcs of the given node.
+    size_t numOutArcs(Node const & node);
+
+    /// \brief Return the number of incoming arcs of the given node.
+    size_t numInArcs(Node const & node);
+
+    /// \brief Return the number of parents of the given node.
+    size_t numParents(Node const & node);
+
+    /// \brief Return the number of children of the given node.
+    size_t numChildren(Node const & node);
+
+    /// \brief Return the i-th node.
+    Node getNode(size_t i);
+
+    /// \brief Return the i-th arc.
+    Arc getArc(size_t i);
+
+    /// \brief Return the i-th outgoing arc of the given node.
+    Arc getOutArc(Node const & node, size_t i);
+
+    /// \brief Return the i-th incoming arc of the given node.
+    Arc getInArc(node const & node, size_t i);
+
+    /// \brief Return the i-th parent of the given node.
+    Node getParent(Node const & node, size_t i);
+
+    /// \brief Return the i-th child of the given node.
+    Node getChild(Node const & node, size_t i);
+
+};
+
+
+
+
 
 } // namespace API
 
