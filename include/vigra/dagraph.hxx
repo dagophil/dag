@@ -604,7 +604,6 @@ namespace detail
 
 
 /// \brief Class for arbitrary graphs. Api and implementation is taken from lemon::ListDigraph.
-/// \todo Keep the api but change the implementation, so it is not just like lemon.
 class DAGraph0
 {
 
