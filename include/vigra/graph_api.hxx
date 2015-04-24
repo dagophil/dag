@@ -9,7 +9,7 @@ namespace vigra
 namespace API
 {
 
-namespace IterGraphDetail
+namespace detail
 {
     /**
      * \brief Node identifier.
@@ -195,14 +195,14 @@ class IterGraph
 {
 public:
 
-    typedef IterGraphDetail::Node Node;
-    typedef IterGraphDetail::Arc Arc;
-    typedef IterGraphDetail::NodeIt NodeIt;
-    typedef IterGraphDetail::ArcIt ArcIt;
-    typedef IterGraphDetail::OutArcIt OutArcIt;
-    typedef IterGraphDetail::InArcIt InArcIt;
-    typedef IterGraphDetail::ParentIt ParentIt;
-    typedef IterGraphDetail::ChildIt ChildIt;
+    typedef detail::Node Node;
+    typedef detail::Arc Arc;
+    typedef detail::NodeIt NodeIt;
+    typedef detail::ArcIt ArcIt;
+    typedef detail::OutArcIt OutArcIt;
+    typedef detail::InArcIt InArcIt;
+    typedef detail::ParentIt ParentIt;
+    typedef detail::ChildIt ChildIt;
 
     /// \brief Default constructor.
     IterGraph();
