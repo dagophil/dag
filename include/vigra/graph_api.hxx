@@ -11,60 +11,54 @@ namespace vigra
 namespace API
 {
 
-namespace detail
+/**
+ * \brief The IterGraph class.
+ */
+template <typename IDTYPE>
+class IterDAG
 {
+public:
+
+    typedef IDTYPE IDType;
+
     /**
-     * \brief Node identifier.
+     * \brief Node descriptor.
      *
      * The Node class is used as a node identifier (and not to store node data).
      * Graph functions may take Node objects as parameters and the graph itself
      * finds the appropriate data.
-     *
-     * Two nodes are considered to be equal if the ids are equal.
      */
-    template <typename ID>
     class Node
     {
     public:
-        typedef ID index_type;
         Node(lemon::Invalid = lemon::INVALID);
-        Node(index_type const & id);
-        index_type id();
-        void set_id(index_type const & id);
-        bool operator!=(Node const & other);
-        bool operator==(Node const & other);
+        bool operator!=(Node const & other) const;
+        bool operator==(Node const & other) const;
+        bool operator<(Node const &) const;
     };
 
     /**
-     * \brief Arc identifier.
+     * \brief Arc descriptor.
      *
      * The Arc class is used as an arc identifier (and not to store arc data).
      * Graph functions may take Arc objects as parameters and the graph itself
      * finds the appropriate data.
-     *
-     * Two arcs are considered to be equal if the ids are equal.
      */
-    template <typename ID>
     class Arc
     {
     public:
-        typedef ID index_type;
         Arc(lemon::Invalid = lemon::INVALID);
-        Arc(index_type const & id);
-        index_type id();
-        void set_id(index_type const & id);
-        bool operator!=(Arc const & other);
-        bool operator==(Arc const & other);
+        bool operator!=(Arc const & other) const;
+        bool operator==(Arc const & other) const;
+        bool operator<(Arc const &) const;
     };
 
     /// \brief Iterator over all nodes.
-    template <typename GRAPH>
     class NodeIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        NodeIt(Graph const & graph);
+        NodeIt(lemon::Invalid = lemon::INVALID);
+        NodeIt(IterDAG const & graph);
         NodeIt & operator++();
         Node operator*();
         bool operator!=(NodeIt const & other);
@@ -72,13 +66,11 @@ namespace detail
     };
 
     /// \brief Iterator over all arcs.
-    template <typename GRAPH>
     class ArcIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Arc Arc;
-        ArcIt(Graph const & graph);
+        ArcIt(lemon::Invalid = lemon::INVALID);
+        ArcIt(IterDAG const & graph);
         ArcIt & operator++();
         Arc operator*();
         bool operator!=(ArcIt const & other);
@@ -86,14 +78,10 @@ namespace detail
     };
 
     /// \brief Iterator over all outgoing arcs of a node.
-    template <typename GRAPH>
     class OutArcIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        typedef typename Graph::Arc Arc;
-        OutArcIt(Graph const & graph, Node const & node);
+        OutArcIt(IterDAG const & graph, Node const & node);
         OutArcIt & operator++();
         Arc operator*();
         bool operator!=(OutArcIt const & other);
@@ -101,14 +89,10 @@ namespace detail
     };
 
     /// \brief Iterator over all incoming arcs of a node.
-    template <typename GRAPH>
     class InArcIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        typedef typename Graph::Arc Arc;
-        InArcIt(Graph const & graph, Node const & node);
+        InArcIt(IterDAG const & graph, Node const & node);
         InArcIt & operator++();
         Arc operator*();
         bool operator!=(InArcIt const & other);
@@ -122,13 +106,10 @@ namespace detail
      * This iterator exists only for convenience.
      * It could be emulated by taking the source of the InArcIt arcs.
      */
-    template <typename GRAPH>
     class ParentIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        ParentIt(Graph const & graph, Node const & node);
+        ParentIt(IterDAG const & graph, Node const & node);
         ParentIt & operator++();
         Node operator*();
         bool operator!=(ParentIt const & other);
@@ -142,13 +123,10 @@ namespace detail
      * This iterator exists only for convenience.
      * It could be emulated by taking the target of the OutArcIt arcs.
      */
-    template <typename GRAPH>
     class ChildIt
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
-        ChildIt(Graph const & graph, Node const & node);
+        ChildIt(IterDAG const & graph, Node const & node);
         ChildIt & operator++();
         Node operator*();
         bool operator!=(ChildIt const & other);
@@ -156,66 +134,51 @@ namespace detail
     };
 
     /// \brief Property map for nodes. Typically implemented with std::map.
-    template <typename GRAPH, typename T>
+    template <typename T>
     class NodeMap
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Node Node;
         typedef T value_type;
         typedef value_type & reference;
         typedef value_type const & const_reference;
 
         /// \brief Access the property of the given node.
-        /// \todo See operator[] above.
-        const_reference operator[](Node const & node) const;
+        /// \note If the property for the given node does not exist, a runtime error is thrown.
+        reference at(Node const & node);
 
         /// \brief Access the property of the given node.
-        /// \todo What is the preferred behavior when no property is stored for the given node? Create one with the default constructor or throw an exception?
+        /// \note If the property for the given node does not exist, a runtime error is thrown.
+        const_reference at(Node const & node) const;
+
+        /// \brief Access the property of the given node.
+        /// \note If the property for the given node does not exist, it is created with the default constructor.
         reference operator[](Node const & node);
     };
 
     /// \brief Property map for arcs. Typically implemented with std::map.
-    template <typename GRAPH, typename T>
+    template <typename T>
     class ArcMap
     {
     public:
-        typedef GRAPH Graph;
-        typedef typename Graph::Arc Arc;
         typedef T value_type;
         typedef value_type & reference;
         typedef value_type const & const_reference;
 
         /// \brief Access the property of the given arc.
-        /// \todo What is the preferred behavior when no property is stored for the given arc? Create on with the default constructor or throw an exception?
-        reference operator[](Arc const & arc);
+        /// \note If the property for the given arc does not exist, an out_of_range exception is thrown.
+        reference at(Arc const & arc);
 
         /// \brief Access the property of the given arc.
-        /// \todo See operator[] above.
-        const_reference operator[](Arc const & arc) const;
+        /// \note If the property for the given arc does not exist, an out_of_range exception is thrown.
+        const_reference at(Arc const & arc) const;
+
+        /// \brief Access the property of the given arc.
+        /// \note If the property for the given arc does not exist, it is created with the default constructor.
+        reference operator[](Arc const & arc);
     };
 
-} // namespace IterGraphDetail
-
-/**
- * \brief The IterGraph class.
- */
-template <typename ID = int>
-class IterGraph
-{
-public:
-    typedef ID index_type;
-    typedef detail::Node<index_type> Node;
-    typedef detail::Arc<index_type> Arc;
-    typedef detail::NodeIt NodeIt;
-    typedef detail::ArcIt ArcIt;
-    typedef detail::OutArcIt OutArcIt;
-    typedef detail::InArcIt InArcIt;
-    typedef detail::ParentIt ParentIt;
-    typedef detail::ChildIt ChildIt;
-
-    /// \brief Default constructor.
-    IterGraph();
+    /// \brief Constructor for an empty graph.
+    IterDAG();
 
     /// \brief Add a node.
     /// \todo This is not part of the lemon digraph. Why?
@@ -239,34 +202,11 @@ public:
     /// \brief Return the target node of the given arc.
     Node target(Arc const & arc) const;
 
-    /// \brief Copy this graph into other.
-    void copyTo(IterGraph & other) const;
+    /// \brief Return the id of the given node.
+    IDType id(Node const & node) const;
 
-private:
-
-    /// \brief Not copy constructable. Use copyTo() instead.
-    IterGraph(IterGraph const &);
-
-    /// \brief Assignment is not allowed. Use copyTo() instead.
-    void operator=(IterGraph const &);
-
-};
-
-/**
- * \brief The RandomAccessGraph class.
- *
- * \note Even though it is not fully listed here, all of the IterGraph API is supported.
- *
- * \todo Once the IterGraph API is complete, list all of it here.
- */
-template <typename ID = int>
-class RandomAccessGraph
-{
-public:
-
-    typedef ID index_type;
-    typedef detail::Node<index_type> Node;
-    typedef detail::Arc<index_type> Arc;
+    /// \brief Return the id of the given arc.
+    IDType id(Arc const & arc) const;
 
     /// \brief Return the number of nodes.
     size_t numNodes() const;
@@ -274,35 +214,143 @@ public:
     /// \brief Return the number of arcs.
     size_t numArcs() const;
 
-    /// \brief Return the number of outgoing arcs of the given node.
-    size_t numOutArcs(Node const & node);
+    /// \brief Return the in-degree of the node (= number of incoming arcs = number of parents).
+    size_t inDegree(Node const & node) const;
 
-    /// \brief Return the number of incoming arcs of the given node.
-    size_t numInArcs(Node const & node);
+    /// \brief Return the out-degree of the node (= number of outgoing arcs = number of children).
+    size_t outDegree(Node const & node) const;
 
     /// \brief Return the number of parents of the given node.
-    size_t numParents(Node const & node);
+    /// \note Convenience function for inDegree.
+    size_t numParents(Node const & node) const;
 
     /// \brief Return the number of children of the given node.
-    size_t numChildren(Node const & node);
+    /// \note Convenience function for outDegree.
+    size_t numChildren(Node const & node) const;
+
+};
+
+/**
+ * \brief The RandomAccessDAG class.
+ *
+ * \note Even though it is not fully listed here, all of the IterDAG API is supported.
+ *
+ * \todo Once the IterDAG API is complete, list all of it here.
+ */
+class RandomAccessDAG
+{
+public:
+
+    class Node {};
+    class Arc {};
 
     /// \brief Return the i-th node.
-    Node getNode(size_t i);
+    Node getNode(size_t i) const;
 
     /// \brief Return the i-th arc.
-    Arc getArc(size_t i);
+    Arc getArc(size_t i) const;
 
     /// \brief Return the i-th outgoing arc of the given node.
-    Arc getOutArc(Node const & node, size_t i);
+    Arc getOutArc(Node const & node, size_t i) const;
 
     /// \brief Return the i-th incoming arc of the given node.
-    Arc getInArc(node const & node, size_t i);
+    Arc getInArc(node const & node, size_t i) const;
 
     /// \brief Return the i-th parent of the given node.
-    Node getParent(Node const & node, size_t i);
+    Node getParent(Node const & node, size_t i) const;
 
     /// \brief Return the i-th child of the given node.
-    Node getChild(Node const & node, size_t i);
+    Node getChild(Node const & node, size_t i) const;
+
+};
+
+/**
+ * \brief The SingleRootIterDAG class.
+ *
+ * One root node -> one connected component.
+ *
+ * \note Even though it is not fully listed here, all of the IterDAG API is supported.
+ *
+ * \todo Once the IterGraph API is complete, list all of it here.
+ */
+class SingleRootIterDAG
+{
+public:
+
+    class Node {};
+
+    /// \brief Iterator over all leaf nodes.
+    class LeafIt
+    {
+    public:
+        LeafIt(lemon::Invalid = lemon::INVALID);
+        LeafIt(SingleRootIterDAG const & graph);
+        LeafIt & operator++();
+        Node operator*();
+        bool operator!=(LeafIt const & other);
+        bool operator==(LeafIt const & other);
+    };
+
+    /// \brief Return the root node.
+    Node getRoot() const;
+
+};
+
+/**
+ * \brief The SingleRootRandomAccessDAG class.
+ *
+ * \note Event though it is not full ylisted here, all of the RandomAccessDAG API is supported.
+ *
+ * \note Once the RandomAccessDAG API is complete, list all of it here.
+ */
+class SingleRootRandomAccessDAG
+{
+public:
+
+    class Node {};
+
+    /// \brief Return the number of leaf nodes.
+    size_t numLeaves() const;
+
+    /// \brief Return the i-th leaf node.
+    Node getLeafNode(size_t i) const;
+
+    /// \brief Return the root node.
+    Node getRoot() const;
+
+};
+
+/**
+ * \brief The IterJungle class.
+ *
+ * The IterJungle is a composite of single-root graphs. The IterDAG API is
+ * fully supported, except that the addNode method needs an additional argument.
+ */
+template <typename Tree>
+class IterJungle
+{
+public:
+
+    class Node {};
+
+    typedef typename Tree::Node TreeNode;
+
+    typedef typename Tree::Arc TreeArc;
+
+    /// \brief Constructor for an empty jungle with the given number of trees.
+    IterJungle(size_t num_trees);
+
+    /// \brief Return the desired tree.
+    Tree & getTree(size_t i);
+
+    /// \brief Return the desired tree.
+    Tree const & getTree(size_t i) const;
+
+    /// \brief Add a node to the given tree.
+    Node addNode(size_t tree_index);
+
+    /// \brief Return the tree index of the given node.
+    size_t getTreeIndex(Node const & node) const;
 
 };
 

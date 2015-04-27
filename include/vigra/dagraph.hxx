@@ -5,6 +5,9 @@
 #include <utility>
 #include <unordered_set>
 #include <unordered_map>
+#include <map>
+#include <list>
+#include <stack>
 
 #include <vigra/graphs.hxx>  // for lemon::INVALID
 
@@ -30,22 +33,22 @@ namespace detail
             : id_(id)
         {}
 
-        bool operator==(const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other) const
+        bool operator==(GenericGraphItem const & other) const
         {
             return id_ == other.id_;
         }
 
-        bool operator!=(const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other) const
+        bool operator!=(GenericGraphItem const & other) const
         {
             return id_ != other.id_;
         }
 
-        bool operator<(const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other) const
+        bool operator<(GenericGraphItem const & other) const
         {
             return id_ < other.id_;
         }
 
-        bool operator>(const GenericGraphItem<INDEX_TYPE, CLASS_ID> & other) const
+        bool operator>(GenericGraphItem const & other) const
         {
             return id_ > other.id_;
         }
@@ -76,7 +79,7 @@ namespace detail
     /// \brief Iterator for graph items (e. g. node, arc, leaf nodes, ...).
     /// \note Like in lemon, the iterator is a subclass of ITEM, so it can be used without dereferencing.
     template <typename GRAPH, typename FUNCTOR>
-    class ItemIt : public FUNCTOR::Item
+    class ItemIt
     {
     public:
 
@@ -85,36 +88,46 @@ namespace detail
         typedef typename Functor::Item Item;
 
         ItemIt(Graph const & graph)
-            : Item(),
-              functor_(graph)
+            : functor_(graph)
         {
-            functor_.first(static_cast<Item &>(*this));
+            functor_.first(item_);
         }
 
-        ItemIt(lemon::Invalid)
-            : Item(lemon::INVALID),
-              functor_(nullptr)
+        ItemIt(lemon::Invalid = lemon::INVALID)
+            : functor_(nullptr),
+              item_(lemon::INVALID)
         {}
 
         ItemIt & operator++()
         {
-            functor_.next(static_cast<Item &>(*this));
+            functor_.next(item_);
             return *this;
         }
 
-        ItemIt* operator->()
+        Item* operator->()
         {
-            return this;
+            return &item_;
         }
 
-        ItemIt & operator*()
+        Item & operator*()
         {
-            return *this;
+            return item_;
+        }
+
+        bool operator==(lemon::Invalid const &) const
+        {
+            return item_ == lemon::INVALID;
+        }
+
+        bool operator!=(lemon::Invalid const &) const
+        {
+            return item_ != lemon::INVALID;
         }
 
     protected:
 
         Functor functor_;
+        Item item_;
     };
 
     /// \brief Functor for ItemIt to iterate over the nodes of a graph.
@@ -384,7 +397,7 @@ namespace detail
     };
 
     template <typename GRAPH, typename FUNCTOR>
-    class SubItemIt : public FUNCTOR::IterItem
+    class SubItemIt
     {
     public:
 
@@ -394,36 +407,46 @@ namespace detail
         typedef typename Functor::IterItem IterItem;
 
         SubItemIt(Graph const & graph, Item const & item)
-            : IterItem(),
-              functor_(graph)
+            : functor_(graph)
         {
-            functor_.first(item, static_cast<IterItem &>(*this));
+            functor_.first(item, iteritem_);
         }
 
         SubItemIt(lemon::Invalid)
-            : IterItem(lemon::INVALID),
-              functor_(nullptr)
+            : functor_(nullptr),
+              iteritem_(lemon::INVALID)
         {}
 
         SubItemIt & operator++()
         {
-            functor_.next(static_cast<IterItem &>(*this));
+            functor_.next(iteritem_);
             return *this;
         }
 
-        SubItemIt* operator->()
+        IterItem* operator->()
         {
-            return this;
+            return &iteritem_;
         }
 
-        SubItemIt & operator*()
+        IterItem & operator*()
         {
-            return *this;
+            return iteritem_;
+        }
+
+        bool operator==(lemon::Invalid const &) const
+        {
+            return iteritem_ == lemon::INVALID;
+        }
+
+        bool operator!=(lemon::Invalid const &) const
+        {
+            return iteritem_ != lemon::INVALID;
         }
 
     protected:
 
         Functor functor_;
+        IterItem iteritem_;
     };
 
     /// \brief Functor for SubItemIt to iterate over all outgoing arcs of a node.
@@ -599,6 +622,32 @@ namespace detail
         std::hash<index_type> h_;
     };
 
+    /// \brief Basic property map class.
+    template <typename INDEX_TYPE, typename VALUE_TYPE, typename MAP = std::map<INDEX_TYPE, VALUE_TYPE> >
+    class PropertyMap
+    {
+    public:
+        typedef INDEX_TYPE index_type;
+        typedef VALUE_TYPE value_type;
+        typedef value_type & reference;
+        typedef value_type const & const_reference;
+        typedef MAP Map;
+        reference at(index_type const & x)
+        {
+            return map_.at(x);
+        }
+        const_reference at(index_type const & x) const
+        {
+            return map_.at(x);
+        }
+        reference operator[](index_type const & x)
+        {
+            return map_[x];
+        }
+    protected:
+        Map map_;
+    };
+
 } // namespace detail
 
 
@@ -628,8 +677,14 @@ public:
 //    };
 //    template <typename VALUETYPE>
 //    using PropertyMap = std::map<Node, VALUETYPE>;
-    template <typename VALUETYPE>
-    using PropertyMap = std::unordered_map<Node, VALUETYPE, detail::NodeHash<Node> >;
+//    template <typename VALUETYPE>
+//    using PropertyMap = std::unordered_map<Node, VALUETYPE, detail::NodeHash<Node> >;
+
+    template <typename T>
+    using NodeMap = detail::PropertyMap<Node, T, std::map<Node, T> >;
+
+    template <typename T>
+    using ArcMap = detail::PropertyMap<Arc, T, std::map<Arc, T> >;
 
     DAGraph0();
 
@@ -1113,11 +1168,11 @@ Forest1<GRAPH>::Forest1(Parent const & other)
 {
     for (typename Parent::RootNodeIt it(*this); it != lemon::INVALID; ++it)
     {
-        roots_.insert(Node(it));
+        roots_.insert(Node(*it));
     }
     for (typename Parent::LeafNodeIt it(*this); it != lemon::INVALID; ++it)
     {
-        leaves_.insert(Node(it));
+        leaves_.insert(Node(*it));
     }
 }
 
@@ -1198,6 +1253,294 @@ auto Forest1<GRAPH>::leaves_cend() const -> const_iterator
 {
     return leaves_.cend();
 }
+
+
+
+//namespace TreeCompositionDetail
+//{
+//    template <typename ID>
+//    class Node
+//    {
+//    public:
+//        typedef ID index_type;
+//        Node(lemon::Invalid = lemon::INVALID)
+//            : id_(-1)
+//        {}
+//        Node(index_type const & id)
+//            : id_(id)
+//        {}
+//        bool operator!=(Node const & other) const
+//        {
+//            return id_ != other.id_;
+//        }
+//        bool operator==(Node const & other) const
+//        {
+//            return id_ == other.id_;
+//        }
+//        bool operator<(Node const & other) const
+//        {
+//            return id_ < other.id_;
+//        }
+//    protected:
+//        index_type id_;
+//    };
+
+//    template <typename ID>
+//    class Arc
+//    {
+//    public:
+//        typedef ID index_type;
+//        Arc(lemon::Invalid = lemon::INVALID)
+//            : id_(-1)
+//        {}
+//        Arc(index_type const & id)
+//            : id_(id)
+//        {}
+//        bool operator!=(Arc const & other) const
+//        {
+//            return id_ != other.id_;
+//        }
+//        bool operator==(Arc const & other) const
+//        {
+//            return id_ == other.id_;
+//        }
+//        bool operator<(Arc const & other) const
+//        {
+//            return id_ < other.id_;
+//        }
+//    protected:
+//        index_type id_;
+//    };
+
+//    template <typename INDEX_TYPE, typename VALUE_TYPE, typename MAP = std::map<INDEX_TYPE, VALUE_TYPE> >
+//    class PropertyMap
+//    {
+//    public:
+//        typedef MAP Map;
+//        typedef INDEX_TYPE index_type;
+//        typedef VALUE_TYPE value_type;
+//        typedef value_type & reference;
+//        typedef value_type const & const_reference;
+//        reference at(index_type const & x)
+//        {
+//            return map_.at(x);
+//        }
+//        const_reference at(index_type const & x) const
+//        {
+//            return map_.at(x);
+//        }
+//        reference operator[](index_type const & x)
+//        {
+//            return map_[x];
+//        }
+//    protected:
+//        Map map_;
+//    };
+
+//}
+
+//class SingleSourceDAG
+//{
+//public:
+
+//    typedef Int64 index_type;
+//    typedef TreeCompositionDetail::Node<index_type> Node;
+//    typedef TreeCompositionDetail::Arc<index_type> Arc;
+
+//    template <typename T>
+//    using NodeMap = TreeCompositionDetail::PropertyMap<Node, T>;
+
+//    template <typename T>
+//    using ArcMap = TreeCompositionDetail::PropertyMap<Arc, T>;
+
+//    SingleSourceDAG();
+
+//    Node addNode();
+
+//    Arc addArc(Node const & u, Node const & v);
+
+//    void erase(Node const & node);
+
+//    void erase(Arc const & arc);
+
+//    Node source(Arc const & arc) const;
+
+//    Node target(Arc const & arc) const;
+
+//    void copyTo(SingleSourceDAG & other) const;
+
+//private:
+
+//    SingleSourceDAG(SingleSourceDAG const &);
+
+//    void operator=(SingleSourceDAG const &);
+
+//};
+
+//inline SingleSourceDAG::SingleSourceDAG()
+//{}
+
+
+
+
+
+//namespace NaiveGraphDetail
+//{
+//    template <typename NODETYPE>
+//    class Node
+//    {
+//    public:
+//        typedef NODETYPE NodeType;
+//        Node(lemon::Invalid = lemon::INVALID)
+//            : node_(nullptr)
+//        {}
+//        bool operator!=(Node const & other)
+//        {
+//            return *node_ != *other.node_;
+//        }
+//        bool operator==(Node const & other)
+//        {
+//            return *node_ == *other.node_;
+//        }
+//    protected:
+//        NodeType* node_;
+//    };
+
+//    template <typename NODETYPE>
+//    class Arc
+//    {
+//    public:
+//        typedef NODETYPE NodeType;
+//        typedef Node<NodeType> NodeT;
+//        Arc(lemon::Invalid = lemon::INVALID)
+//            : source_(lemon::INVALID),
+//              target_(lemon::INVALID)
+//        {}
+//        bool operator!=(Arc const & other)
+//        {
+//            return (source_ != other.source_) || (target_ != other.target_);
+//        }
+//        bool operator==(Arc const & other)
+//        {
+//            return (source_ == other.source_) && (target_ == other.target_);
+//        }
+//    protected:
+//        NodeT source_;
+//        NodeT target_;
+//    };
+
+//    template <typename GRAPH>
+//    class NodeIt
+//    {
+//    public:
+//        typedef GRAPH Graph;
+//        typedef typename Graph::Node Node;
+//        NodeIt(lemon::Invalid = lemon::INVALID)
+//            : graph_(nullptr)
+//        {}
+//        NodeIt(Graph const & graph)
+//            : graph_(&graph)
+//        {}
+//        NodeIt & operator++();
+//        Node operator*();
+//        bool operator!=(NodeIt const & other);
+//        bool operator==(Node const & other);
+//    protected:
+//        Graph const * graph_;
+//        std::stack<Node> nodes_;
+//    };
+
+//    template <typename GRAPH, typename T>
+//    class NodeMap
+//    {
+//    public:
+//        typedef GRAPH Graph;
+//        typedef typename Graph::Node Node;
+//        typedef T value_type;
+//        typedef value_type & reference;
+//        typedef value_type const & const_reference;
+
+//        reference operator[](Node const & node)
+//        {
+
+//        }
+
+//        reference at(Node const & node)
+//        {
+
+//        }
+
+//        const_reference at(Node const & node) const
+//        {
+
+//        }
+
+//    protected:
+//        std::map<Node, value_type> map_;
+//    };
+//}
+
+//class NaiveGraph
+//{
+//protected:
+
+//    class Node_t
+//    {
+//    public:
+//        bool operator!=(Node_t const & other)
+//        {
+//            return id_ != other.id_;
+//        }
+//        bool operator==(Node_t const & other)
+//        {
+//            return id_ == other.id_;
+//        }
+//    protected:
+//        int id_;
+//        std::list<Node_t*> parents_;
+//        std::list<Node_t*> children_;
+//    };
+
+//public:
+
+//    typedef NaiveGraphDetail::Node<Node_t> Node;
+//    typedef NaiveGraphDetail::Arc<Node_t> Arc;
+
+//    NaiveGraph();
+
+//    ~NaiveGraph();
+
+//    Node addNode();
+
+//    Arc addArc(Node const & u, Node const & v);
+
+//    void erase(Arc const & arc);
+
+//    Node source(Arc const & arc) const;
+
+//    Node target(Arc const & arc) const;
+
+//    void copyTo(NaiveGraph & other) const;
+
+//private:
+
+//    NaiveGraph(NaiveGraph const &);
+
+//    void operator=(NaiveGraph const &);
+
+//protected:
+
+//    std::list<Node> roots_;
+//};
+
+//inline NaiveGraph::NaiveGraph()
+//{}
+
+//inline NaiveGraph::~NaiveGraph()
+//{
+//    // TODO: Delete all nodes.
+
+//}
 
 
 

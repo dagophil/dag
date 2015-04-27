@@ -350,8 +350,11 @@ public:
     typedef typename Labels::value_type LabelType;
     typedef detail::Split<FeatureType> Split;
 
+//    template <typename T>
+//    using PropertyMap = typename Forest::template PropertyMap<T>;
+
     template <typename T>
-    using PropertyMap = typename Forest::template PropertyMap<T>;
+    using NodeMap = typename Forest::template NodeMap<T>;
 
     /// \brief Initialize the tree with the given instance indices.
     /// \param instance_indices: The indices of the instances in the feature matrix.
@@ -397,13 +400,13 @@ protected:
     Forest tree_;
 
     /// \brief The node labels that were found in training.
-    PropertyMap<LabelType> node_labels_;
+    NodeMap<LabelType> node_labels_;
 
     /// \brief The split of each node.
-    PropertyMap<Split> node_splits_;
+    NodeMap<Split> node_splits_;
 
     /// \brief Whether the node is a left or a right child.
-    PropertyMap<bool> is_left_node;
+    NodeMap<bool> is_left_node;
 
 private:
 
@@ -414,7 +417,7 @@ private:
     std::vector<size_t> instance_indices_;
 
     /// \brief The instances of each node (begin and end iterator in the vector instance_indices_).
-    PropertyMap<Range> instance_ranges_;
+    NodeMap<Range> instance_ranges_;
 
 };
 
@@ -459,7 +462,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
     typedef typename Forest::RootNodeIt RootNodeIt;
     typedef typename Forest::ChildIt ChildIt;
 
-    Node rootnode = RootNodeIt(tree_);
+    Node rootnode = *RootNodeIt(tree_);
     vigra_assert(tree_.valid(rootnode), "DecisionTree0::predict(): The graph has no root node.");
 
     for (size_t i = 0; i < test_x.num_instances(); ++i)
@@ -474,7 +477,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
 
              for (ChildIt it(tree_, node); it != lemon::INVALID; ++it)
              {
-                 auto const tmp = Node(it);
+                 auto const tmp = Node(*it);
                  if ((go_left && is_left_node.at(tmp)) || (!go_left && !is_left_node.at(tmp)))
                  {
                      node = tmp;
@@ -637,8 +640,11 @@ public:
     typedef LABELS Labels;
     typedef typename Labels::value_type LabelType;
 
+//    template <typename VALUE_TYPE>
+//    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
+
     template <typename VALUE_TYPE>
-    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
+    using NodeMap = Forest::template NodeMap<VALUE_TYPE>;
 
     RandomForest0() = default;
     RandomForest0(RandomForest0 const &) = default;

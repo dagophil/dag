@@ -66,7 +66,7 @@ void test_dagraph0()
         std::vector<Node> nodes {a, b, c, d, e};
         std::vector<Node> iter_nodes;
         for (NodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in NodeIt.");
     }
 
@@ -75,7 +75,7 @@ void test_dagraph0()
         std::vector<Node> nodes {a, e};
         std::vector<Node> iter_nodes;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in RootNodeIt.");
     }
 
@@ -84,7 +84,7 @@ void test_dagraph0()
         std::vector<Node> nodes {c, d};
         std::vector<Node> iter_nodes;
         for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in LeafNodeIt.");
     }
 
@@ -94,7 +94,7 @@ void test_dagraph0()
         std::vector<Arc> arcs {e0, e1, e2, e3};
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in ArcIt.");
     }
 
@@ -104,7 +104,7 @@ void test_dagraph0()
         std::vector<Arc> arcs {e1, e2};
         std::vector<Arc> iter_arcs;
         for (OutArcIt it(g, b); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in OutArcIt.");
     }
 
@@ -114,7 +114,7 @@ void test_dagraph0()
         std::vector<Arc> arcs {e2, e3};
         std::vector<Arc> iter_arcs;
         for (InArcIt it(g, d); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in InArcIt.");
     }
 
@@ -123,7 +123,7 @@ void test_dagraph0()
         std::vector<Node> nodes {b, e};
         std::vector<Node> iter_nodes;
         for (ParentIt it(g, d); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in ParentIt.");
     }
 
@@ -132,7 +132,7 @@ void test_dagraph0()
         std::vector<Node> nodes {c, d};
         std::vector<Node> iter_nodes;
         for (ChildIt it(g, b); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in ChildIt.");
     }
 
@@ -194,7 +194,7 @@ void test_dagraph0()
         std::vector<Node> nodes {a, b, d, e};
         std::vector<Node> iter_nodes;
         for (NodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in erase(Node).");
 
         // All arcs from or to c should have been removed.
@@ -202,7 +202,7 @@ void test_dagraph0()
         std::vector<Arc> arcs {e0, e2, e3};
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in erase(Node).");
 
         // Re-add the node and the arc for the other tests.
@@ -216,7 +216,7 @@ void test_dagraph0()
         std::vector<Arc> arcs{e1, e2, e3};
         std::vector<Arc> iter_arcs;
         for (ArcIt it(g); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in erase(Arc).");
 
         // Re-add the arc for the other tests.
@@ -271,14 +271,14 @@ void test_forest1()
         std::vector<Node> nodes {a};
         std::vector<Node> iter_nodes;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in RootNodeIt.");
     }
     {
         std::vector<Node> nodes {c, e};
         std::vector<Node> iter_nodes;
         for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in LeafNodeIt.");
     }
 
@@ -290,14 +290,14 @@ void test_forest1()
         std::vector<Node> roots {a, e};
         std::vector<Node> iter_roots;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_roots.push_back(Node(it));
+            iter_roots.push_back(Node(*it));
         vigra_assert(equal_after_sort(roots, iter_roots), "Error in erase(Node).");
 
         // Check that the leaf nodes are correct.
         std::vector<Node> leaves {c, e};
         std::vector<Node> iter_leaves;
         for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_leaves.push_back(Node(it));
+            iter_leaves.push_back(Node(*it));
         vigra_assert(equal_after_sort(leaves, iter_leaves), "Error in erase(Node).");
 
         // Re-add the node and the arcs for the other tests.
@@ -314,14 +314,14 @@ void test_forest1()
         std::vector<Node> roots {a, d};
         std::vector<Node> iter_roots;
         for (RootNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_roots.push_back(Node(it));
+            iter_roots.push_back(Node(*it));
         vigra_assert(equal_after_sort(roots, iter_roots), "Error in erase(Arc).");
 
         // Check that the leaf nodes are correct.
         std::vector<Node> leaves {c, e};
         std::vector<Node> iter_leaves;
         for (LeafNodeIt it(g); it != lemon::INVALID; ++it)
-            iter_leaves.push_back(Node(it));
+            iter_leaves.push_back(Node(*it));
         vigra_assert(equal_after_sort(leaves, iter_leaves), "Error in erase(Arc).");
 
         e2 = g.addArc(b, d);
@@ -350,25 +350,25 @@ void test_forest1()
         std::vector<Node> nodes {a, b, c, d, e, f, g, h};
         std::vector<Node> iter_nodes;
         for (NodeIt it(fo); it != lemon::INVALID; ++it)
-            iter_nodes.push_back(Node(it));
+            iter_nodes.push_back(Node(*it));
         vigra_assert(equal_after_sort(nodes, iter_nodes), "Error in constructor from graph.");
 
         std::vector<Arc> arcs {e0, e1, e2, e3, e4, e5};
         std::vector<Arc> iter_arcs;
         for (ArcIt it(fo); it != lemon::INVALID; ++it)
-            iter_arcs.push_back(Arc(it));
+            iter_arcs.push_back(Arc(*it));
         vigra_assert(equal_after_sort(arcs, iter_arcs), "Error in constructor from graph.");
 
         std::vector<Node> roots {a, f};
         std::vector<Node> iter_roots;
         for (RootNodeIt it(fo); it != lemon::INVALID; ++it)
-            iter_roots.push_back(Node(it));
+            iter_roots.push_back(Node(*it));
         vigra_assert(equal_after_sort(roots, iter_roots), "Error in constructor from graph.");
 
         std::vector<Node> leaves {c, e, g, h};
         std::vector<Node> iter_leaves;
         for (LeafNodeIt it(fo); it != lemon::INVALID; ++it)
-            iter_leaves.push_back(Node(it));
+            iter_leaves.push_back(Node(*it));
         vigra_assert(equal_after_sort(leaves, iter_leaves), "Error in constructor from graph.");
     }
 
