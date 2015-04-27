@@ -34,7 +34,7 @@ public:
         Node(lemon::Invalid = lemon::INVALID);
         bool operator!=(Node const & other) const;
         bool operator==(Node const & other) const;
-        bool operator<(Node const &) const;
+        bool operator<(Node const & other) const;
     };
 
     /**

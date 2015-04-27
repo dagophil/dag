@@ -10,3 +10,7 @@ target_link_libraries(randomforest_test
     ${VIGRA_IMPEX_LIBRARY}
     ${HDF5_LIBRARIES}
 )
+
+add_executable(api_test
+    api_test.cxx
+)
