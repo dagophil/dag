@@ -208,6 +208,12 @@ public:
     /// \brief Return the id of the given arc.
     IDType id(Arc const & arc) const;
 
+    /// \brief Return the node with the given id.
+    Node nodeFromId(IDType const & id) const;
+
+    /// \brief Return the arc with the given id.
+    Arc arcFromId(IDType const & id) const;
+
     /// \brief Return the number of nodes.
     size_t numNodes() const;
 
