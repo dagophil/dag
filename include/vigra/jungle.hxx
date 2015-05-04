@@ -5,6 +5,7 @@
 #include <vector>
 #include <utility>
 #include <algorithm>
+#include <map>
 
 namespace vigra
 {
@@ -88,17 +89,29 @@ namespace detail
         return os << item.id();
     }
 
-    template <typename S, typename T>
-    class InvPair : public std::pair<S, T>
+    template <typename KEYTYPE, typename VALUETYPE, typename MAP = std::map<KEYTYPE, VALUETYPE> >
+    class PropertyMap
     {
     public:
-        typedef std::pair<S, T> Parent;
-        explicit InvPair(int i)
-            : Parent(i, i)
-        {}
-        InvPair(S const & a, T const & b)
-            : Parent(a, b)
-        {}
+        typedef KEYTYPE key_type;
+        typedef VALUETYPE value_type;
+        typedef value_type & reference;
+        typedef value_type const & const_reference;
+        typedef MAP Map;
+        reference at(key_type const & k)
+        {
+            return map_.at(k);
+        }
+        const_reference at(key_type const & k) const
+        {
+            return map_.at(k);
+        }
+        reference operator[](key_type const & k)
+        {
+            return map_[k];
+        }
+    protected:
+        Map map_;
     };
 
 }
@@ -113,6 +126,9 @@ public:
     typedef detail::IndexNode<index_type> Node;
     typedef detail::IndexArc<index_type> Arc;
 
+    template <typename T>
+    using NodeMap = detail::PropertyMap<Node, T>;
+
     // IterDAG API
 
     BinaryTree();
@@ -124,6 +140,10 @@ public:
     void erase(Node const & node);
 
     void erase(Arc const & arc);
+
+    bool valid(Node const & node) const;
+
+    bool valid(Arc const & arc) const;
 
     Node source(Arc const & arc) const;
 
@@ -232,8 +252,10 @@ inline BinaryTree::Node BinaryTree::addNode()
     return Node(id);
 }
 
-inline BinaryTree::Arc BinaryTree::addArc(Node const & u, Node const & v)
-{
+inline BinaryTree::Arc BinaryTree::addArc(
+        Node const & u,
+        Node const & v
+){
     vigra_precondition(nodes_[v.id()].parent == -1,
             "BinaryTree::addArc(): The node v already has a parent.");
 
@@ -259,8 +281,9 @@ inline BinaryTree::Arc BinaryTree::addArc(Node const & u, Node const & v)
     return Arc(arc_id);
 }
 
-inline void BinaryTree::erase(Node const & node)
-{
+inline void BinaryTree::erase(
+        Node const & node
+){
     index_type id = node.id();
     NodeT & n = nodes_[id];
 
@@ -315,8 +338,9 @@ inline void BinaryTree::erase(Node const & node)
     root_changed_ = true;
 }
 
-inline void BinaryTree::erase(Arc const & arc)
-{
+inline void BinaryTree::erase(
+        Arc const & arc
+){
     index_type const id = arc.id();
     NodeT & src = nodes_[id/2];
 
@@ -334,13 +358,31 @@ inline void BinaryTree::erase(Arc const & arc)
     root_changed_ = true;
 }
 
-inline BinaryTree::Node BinaryTree::source(Arc const & arc) const
-{
+inline bool BinaryTree::valid(
+        Node const & node
+) const {
+    return node.id() >= 0 && node.id() < nodes_.size() && nodes_[node.id()].prev != -2;
+}
+
+inline bool BinaryTree::valid(
+        Arc const & arc
+) const {
+    index_type const id = arc.id();
+    index_type const node_id = id/2;
+    if (!valid(Node(node_id)))
+        return false;
+    return (nodes_[node_id].left_child != -1 && id % 2 == 0) || (nodes_[node_id].right_child != -1 && id % 2 == 1);
+}
+
+inline BinaryTree::Node BinaryTree::source(
+        Arc const & arc
+) const {
     return Node(arc.id()/2);
 }
 
-inline BinaryTree::Node BinaryTree::target(Arc const & arc) const
-{
+inline BinaryTree::Node BinaryTree::target(
+        Arc const & arc
+) const {
     index_type id = arc.id();
     NodeT const & src = nodes_[id/2];
     if (id % 2 == 0)
@@ -353,23 +395,27 @@ inline BinaryTree::Node BinaryTree::target(Arc const & arc) const
     }
 }
 
-inline BinaryTree::index_type BinaryTree::id(Node const & node) const
-{
+inline BinaryTree::index_type BinaryTree::id(
+        Node const & node
+) const {
     return node.id();
 }
 
-inline BinaryTree::index_type BinaryTree::id(Arc const & arc) const
-{
+inline BinaryTree::index_type BinaryTree::id(
+        Arc const & arc
+) const {
     return arc.id();
 }
 
-inline BinaryTree::Node BinaryTree::nodeFromId(index_type const & id) const
-{
+inline BinaryTree::Node BinaryTree::nodeFromId(
+        index_type const & id
+) const {
     return Node(id);
 }
 
-inline BinaryTree::Arc BinaryTree::arcFromId(index_type const & id) const
-{
+inline BinaryTree::Arc BinaryTree::arcFromId(
+        index_type const & id
+) const {
     return Arc(id);
 }
 
@@ -383,8 +429,9 @@ inline size_t BinaryTree::numArcs() const
     return num_arcs_;
 }
 
-inline size_t BinaryTree::inDegree(Node const & node) const
-{
+inline size_t BinaryTree::inDegree(
+        Node const & node
+) const {
     if (nodes_[node.id()].parent == -1)
     {
         return 0;
@@ -395,8 +442,9 @@ inline size_t BinaryTree::inDegree(Node const & node) const
     }
 }
 
-inline size_t BinaryTree::outDegree(Node const & node) const
-{
+inline size_t BinaryTree::outDegree(
+        Node const & node
+) const {
     NodeT const & n = nodes_[node.id()];
     if (n.left_child == -1 && n.right_child == -1)
     {
@@ -416,24 +464,30 @@ inline size_t BinaryTree::outDegree(Node const & node) const
     }
 }
 
-inline size_t BinaryTree::numParents(Node const & node) const
-{
+inline size_t BinaryTree::numParents(
+        Node const & node
+) const {
     return inDegree(node);
 }
 
-inline size_t BinaryTree::numChildren(Node const & node) const
-{
+inline size_t BinaryTree::numChildren(
+        Node const & node
+) const {
     return outDegree(node);
 }
 
-inline BinaryTree::Arc BinaryTree::getOutArc(Node const & node, size_t i) const
-{
+inline BinaryTree::Arc BinaryTree::getOutArc(
+        Node const & node,
+        size_t i
+) const {
     vigra_precondition(i == 0 || i == 1, "BinaryTree::getOutArc(): Index out of range.");
     return Arc(2*node.id()+i);
 }
 
-inline BinaryTree::Arc BinaryTree::getInArc(Node const & node, size_t i) const
-{
+inline BinaryTree::Arc BinaryTree::getInArc(
+        Node const & node,
+        size_t i
+) const {
     vigra_precondition(i == 0, "BinaryTree::getInArc(): Index out of range.");
     index_type const p_id = nodes_[node.id()].parent;
     NodeT const & p = nodes_[p_id];
@@ -447,14 +501,18 @@ inline BinaryTree::Arc BinaryTree::getInArc(Node const & node, size_t i) const
     }
 }
 
-inline BinaryTree::Node BinaryTree::getParent(Node const & node, size_t i) const
-{
+inline BinaryTree::Node BinaryTree::getParent(
+        Node const & node,
+        size_t i
+) const {
     vigra_precondition(i == 0, "BinaryTree::getParent(): Index out of range.");
     return Node(nodes_[node.id()].parent);
 }
 
-inline BinaryTree::Node BinaryTree::getChild(Node const & node, size_t i) const
-{
+inline BinaryTree::Node BinaryTree::getChild(
+        Node const & node,
+        size_t i
+) const {
     if (i == 0)
     {
         return Node(nodes_[node.id()].left_child);
@@ -498,33 +556,12 @@ inline BinaryTree::Node BinaryTree::getRoot() const
     }
 }
 
-inline BinaryTree::Node BinaryTree::getLeafNode(size_t i) const
-{
+inline BinaryTree::Node BinaryTree::getLeafNode(
+        size_t i
+) const {
     // TODO: Implement.
     vigra_fail("Not implemented yet.");
 }
-
-
-
-//template <typename TREE>
-//class RandomAccessForest0
-//{
-//public:
-
-//    typedef TREE Tree;
-
-//    RandomAccessForest0();
-
-//protected:
-
-//    std::vector<Tree> trees_;
-
-//};
-
-//template <typename TREE>
-//RandomAccessForest0<TREE>::RandomAccessForest0()
-//    : trees_(10)
-//{}
 
 
 

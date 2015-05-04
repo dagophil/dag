@@ -7,7 +7,8 @@
 #include <queue>
 #include <map>
 
-#include "dagraph.hxx"
+//#include "dagraph.hxx"
+#include "jungle.hxx"
 
 namespace vigra
 {
@@ -337,13 +338,13 @@ protected:
 
 
 /// \brief Simple decision tree class.
-template <typename FOREST, typename FEATURES, typename LABELS>
+template <typename TREE, typename FEATURES, typename LABELS>
 class DecisionTree0
 {
 public:
 
-    typedef FOREST Forest;
-    typedef typename Forest::Node Node;
+    typedef TREE Tree;
+    typedef typename Tree::Node Node;
     typedef FEATURES Features;
     typedef typename Features::value_type FeatureType;
     typedef LABELS Labels;
@@ -354,7 +355,7 @@ public:
 //    using PropertyMap = typename Forest::template PropertyMap<T>;
 
     template <typename T>
-    using NodeMap = typename Forest::template NodeMap<T>;
+    using NodeMap = typename Tree::template NodeMap<T>;
 
     /// \brief Initialize the tree with the given instance indices.
     /// \param instance_indices: The indices of the instances in the feature matrix.
@@ -397,7 +398,7 @@ protected:
     );
 
     /// \brief The graph structure.
-    Forest tree_;
+    Tree tree_;
 
     /// \brief The node labels that were found in training.
     NodeMap<LabelType> node_labels_;
@@ -459,10 +460,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
         MultiArrayView<1, LabelType> & pred_y
 ) const {
 
-    typedef typename Forest::RootNodeIt RootNodeIt;
-    typedef typename Forest::ChildIt ChildIt;
-
-    Node rootnode = *RootNodeIt(tree_);
+    Node rootnode = tree_.getRoot();
     vigra_assert(tree_.valid(rootnode), "DecisionTree0::predict(): The graph has no root node.");
 
     for (size_t i = 0; i < test_x.num_instances(); ++i)
@@ -470,19 +468,16 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
         auto const feats = test_x.instance_features(i);
         Node node = rootnode;
 
-        while (!tree_.isLeafNode(node))
+        while (tree_.outDegree(node) > 0)
         {
              auto const & s = node_splits_.at(node);
-             bool go_left = feats[s.feature_index] < s.thresh;
-
-             for (ChildIt it(tree_, node); it != lemon::INVALID; ++it)
+             if (feats[s.feature_index] < s.thresh)
              {
-                 auto const tmp = Node(*it);
-                 if ((go_left && is_left_node.at(tmp)) || (!go_left && !is_left_node.at(tmp)))
-                 {
-                     node = tmp;
-                     break;
-                 }
+                 node = tree_.getChild(node, 0);
+             }
+             else
+             {
+                 node = tree_.getChild(node, 1);
              }
         }
         pred_y[i] = node_labels_.at(node);
@@ -633,8 +628,9 @@ class RandomForest0
 {
 public:
 
-    typedef vigra::Forest1<vigra::DAGraph0> Forest;
-    typedef Forest::Node Node;
+//    typedef vigra::Forest1<vigra::DAGraph0> Tree;
+    typedef BinaryTree Tree;
+    typedef Tree::Node Node;
     typedef FEATURES Features;
     typedef typename Features::value_type FeatureType;
     typedef LABELS Labels;
@@ -644,7 +640,7 @@ public:
 //    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
 
     template <typename VALUE_TYPE>
-    using NodeMap = Forest::template NodeMap<VALUE_TYPE>;
+    using NodeMap = Tree::template NodeMap<VALUE_TYPE>;
 
     RandomForest0() = default;
     RandomForest0(RandomForest0 const &) = default;
@@ -669,7 +665,7 @@ public:
 protected:
 
     /// \brief The trees of the forest.
-    std::vector<DecisionTree0<Forest, Features, Labels> > dtrees_;
+    std::vector<DecisionTree0<Tree, Features, Labels> > dtrees_;
 
 };
 

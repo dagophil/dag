@@ -196,6 +196,12 @@ public:
     /// \todo This is not part of the lemon digraph. Why?
     void erase(Arc const & arc);
 
+    /// \brief Return true if the node is present in the graph.
+    bool valid(Node const & node) const;
+
+    /// \brief Return true if the arc is present in the graph.
+    bool valid(Arc const & arc) const;
+
     /// \brief Return the source node of the given arc.
     Node source(Arc const & arc) const;
 

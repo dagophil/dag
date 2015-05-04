@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vigra/multi_array.hxx>
 #include <vigra/hdf5impex.hxx>
+#include <unordered_set>
 
 #include <vigra/randomforest.hxx>
 
