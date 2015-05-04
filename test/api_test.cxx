@@ -4,19 +4,16 @@
 
 
 
-template <typename JUNGLE>
-void test_jungle()
+void test_binary_tree()
 {
     using namespace vigra;
 
-    typedef JUNGLE Jungle;
-
-    Jungle g;
+    BinaryTree tree;
 
 }
 
 
 int main()
 {
-    test_jungle<vigra::ListRandomAccessJungle>();
+    test_binary_tree();
 }

@@ -19,7 +19,7 @@ class IterDAG
 {
 public:
 
-    typedef IDTYPE IDType;
+    typedef IDTYPE index_type;
 
     /**
      * \brief Node descriptor.
@@ -203,16 +203,16 @@ public:
     Node target(Arc const & arc) const;
 
     /// \brief Return the id of the given node.
-    IDType id(Node const & node) const;
+    index_type id(Node const & node) const;
 
     /// \brief Return the id of the given arc.
-    IDType id(Arc const & arc) const;
+    index_type id(Arc const & arc) const;
 
     /// \brief Return the node with the given id.
-    Node nodeFromId(IDType const & id) const;
+    Node nodeFromId(index_type const & id) const;
 
     /// \brief Return the arc with the given id.
-    Arc arcFromId(IDType const & id) const;
+    Arc arcFromId(index_type const & id) const;
 
     /// \brief Return the number of nodes.
     size_t numNodes() const;
@@ -250,17 +250,17 @@ public:
     class Node {};
     class Arc {};
 
-    /// \brief Return the i-th node.
-    Node getNode(size_t i) const;
+//    /// \brief Return the i-th node.
+//    Node getNode(size_t i) const;
 
-    /// \brief Return the i-th arc.
-    Arc getArc(size_t i) const;
+//    /// \brief Return the i-th arc.
+//    Arc getArc(size_t i) const;
 
     /// \brief Return the i-th outgoing arc of the given node.
     Arc getOutArc(Node const & node, size_t i) const;
 
     /// \brief Return the i-th incoming arc of the given node.
-    Arc getInArc(node const & node, size_t i) const;
+    Arc getInArc(Node const & node, size_t i) const;
 
     /// \brief Return the i-th parent of the given node.
     Node getParent(Node const & node, size_t i) const;
@@ -326,39 +326,77 @@ public:
 
 };
 
-/**
- * \brief The IterJungle class.
- *
- * The IterJungle is a composite of single-root graphs. The IterDAG API is
- * fully supported, except that the addNode method needs an additional argument.
- */
-template <typename Tree>
-class IterJungle
-{
-public:
+///**
+// * \brief The IterJungle class.
+// *
+// * The IterJungle is a composite of single-root graphs. The IterDAG API is
+// * fully supported, except that the addNode method needs an additional argument.
+// */
+//template <typename TREE>
+//class IterJungle
+//{
+//public:
 
-    class Node {};
+//    class Node {};
 
-    typedef typename Tree::Node TreeNode;
+//    typedef TREE Tree;
 
-    typedef typename Tree::Arc TreeArc;
+//    typedef typename Tree::Node TreeNode;
 
-    /// \brief Constructor for an empty jungle with the given number of trees.
-    IterJungle(size_t num_trees);
+//    typedef typename Tree::Arc TreeArc;
 
-    /// \brief Return the desired tree.
-    Tree & getTree(size_t i);
+//    /// \brief Constructor for an empty jungle with the given number of trees.
+//    IterJungle(size_t num_trees);
 
-    /// \brief Return the desired tree.
-    Tree const & getTree(size_t i) const;
+//    /// \brief Return the desired tree.
+//    Tree & getTree(size_t i);
 
-    /// \brief Add a node to the given tree.
-    Node addNode(size_t tree_index);
+//    /// \brief Return the desired tree.
+//    Tree const & getTree(size_t i) const;
 
-    /// \brief Return the tree index of the given node.
-    size_t getTreeIndex(Node const & node) const;
+//    /// \brief Add a node to the given tree.
+//    Node addNode(size_t tree_index = 0);
 
-};
+//    /// \brief Return the tree index of the given node.
+//    size_t getTreeIndex(Node const & node) const;
+
+//};
+
+///**
+// * \brief The RandomAccessJungle class.
+// *
+// * The RandomAccessJungle is a composite of single-root graphs. The
+// * RandomAccessDAG API is fully supported, except that the addNode method needs
+// * an additional argument.
+// */
+//template <typename TREE>
+//class RandomAccessJungle
+//{
+//public:
+
+//    class Node {};
+
+//    typedef TREE Tree;
+
+//    typedef typename Tree::Node TreeNode;
+
+//    typedef typename Tree::Arc TreeArc;
+
+//    /// \brief Constructor for an empty jungle with the given number of trees.
+//    RandomAccessJungle(size_t num_trees);
+
+//    /// \brief Return the desired tree.
+//    Tree & getTree(size_t i);
+
+//    /// \brief Return the desired tree.
+//    Tree const & getTree(size_t i) const;
+
+//    /// \brief Add a node to the given tree.
+//    Node addNode(size_t tree_index = 0);
+
+//    /// \brief Return the tree index of the given node.
+//    size_t getTreeIndex(Node const & node) const;
+//};
 
 
 

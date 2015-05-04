@@ -3,9 +3,10 @@
 
 #include <vector>
 #include <utility>
+#include <set>
 #include <unordered_set>
-#include <unordered_map>
 #include <map>
+#include <unordered_map>
 #include <list>
 #include <stack>
 
@@ -608,15 +609,14 @@ namespace detail
     };
 
     /// \brief Hash functor for unordered_set<Node>.
-    template <class NODE>
-    struct NodeHash
+    template <typename T>
+    struct IdHash
     {
     public:
-        typedef NODE Node;
-        typedef typename Node::index_type index_type;
-        size_t operator()(Node const & node) const
+        typedef typename T::index_type index_type;
+        size_t operator()(T const & n) const
         {
-            return h_(node.id());
+            return h_(n.id());
         }
     protected:
         std::hash<index_type> h_;
@@ -680,11 +680,17 @@ public:
 //    template <typename VALUETYPE>
 //    using PropertyMap = std::unordered_map<Node, VALUETYPE, detail::NodeHash<Node> >;
 
-    template <typename T>
-    using NodeMap = detail::PropertyMap<Node, T, std::map<Node, T> >;
+//    template <typename T>
+//    using NodeMap = detail::PropertyMap<Node, T, std::map<Node, T> >;
+
+//    template <typename T>
+//    using ArcMap = detail::PropertyMap<Arc, T, std::map<Arc, T> >;
 
     template <typename T>
-    using ArcMap = detail::PropertyMap<Arc, T, std::map<Arc, T> >;
+    using NodeMap = detail::PropertyMap<Node, T, std::unordered_map<Node, T, detail::IdHash<Node> > >;
+
+    template <typename T>
+    using ArcMap = detail::PropertyMap<Arc, T, std::unordered_map<Arc, T, detail::IdHash<Arc> > >;
 
     DAGraph0();
 
@@ -1115,7 +1121,8 @@ public:
     typedef typename Parent::Arc Arc;
     typedef typename Parent::ParentIt ParentIt;
     typedef typename Parent::ChildIt ChildIt;
-    typedef std::unordered_set<Node, detail::NodeHash<Node> > ContainerType;
+    typedef std::unordered_set<Node, detail::IdHash<Node> > ContainerType;
+//    typedef std::set<Node> ContainerType;
     typedef typename ContainerType::const_iterator const_iterator;
     typedef detail::ItemIt<Forest1, detail::RootNodeVectorItFunctor<Forest1> > RootNodeIt;
     typedef detail::ItemIt<Forest1, detail::LeafNodeVectorItFunctor<Forest1> > LeafNodeIt;
