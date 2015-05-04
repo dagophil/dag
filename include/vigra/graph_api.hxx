@@ -263,7 +263,7 @@ public:
     Arc getInArc(Node const & node, size_t i) const;
 
     /// \brief Return the i-th parent of the given node.
-    Node getParent(Node const & node, size_t i) const;
+    Node getParent(Node const & node, size_t i = 0) const;
 
     /// \brief Return the i-th child of the given node.
     Node getChild(Node const & node, size_t i) const;

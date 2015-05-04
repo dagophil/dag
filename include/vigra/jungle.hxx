@@ -46,6 +46,12 @@ namespace detail
     };
 
     template <typename IDTYPE>
+    std::ostream & operator << (std::ostream & os, IndexNode<IDTYPE> const & item)
+    {
+        return os << item.id();
+    }
+
+    template <typename IDTYPE>
     class IndexArc
     {
     public:
@@ -75,6 +81,12 @@ namespace detail
     protected:
         index_type id_;
     };
+
+    template <typename IDTYPE>
+    std::ostream & operator << (std::ostream & os, IndexArc<IDTYPE> const & item)
+    {
+        return os << item.id();
+    }
 
     template <typename S, typename T>
     class InvPair : public std::pair<S, T>
@@ -143,7 +155,7 @@ public:
 
     Arc getInArc(Node const & node, size_t i) const;
 
-    Node getParent(Node const & node, size_t i) const;
+    Node getParent(Node const & node, size_t i = 0) const;
 
     Node getChild(Node const & node, size_t i) const;
 
@@ -175,13 +187,21 @@ protected:
     std::vector<NodeT> nodes_;
     index_type first_node_;
     index_type first_free_node_;
+    size_t num_nodes_;
+    size_t num_arcs_;
+    mutable index_type root_node_;
+    mutable bool root_changed_;
 
 };
 
 inline BinaryTree::BinaryTree()
     : nodes_(),
       first_node_(-1),
-      first_free_node_(-1)
+      first_free_node_(-1),
+      num_nodes_(0),
+      num_arcs_(0),
+      root_node_(0),
+      root_changed_(false)
 {}
 
 inline BinaryTree::Node BinaryTree::addNode()
@@ -208,6 +228,7 @@ inline BinaryTree::Node BinaryTree::addNode()
     nodes_[id].left_child = -1;
     nodes_[id].right_child = -1;
 
+    ++num_nodes_;
     return Node(id);
 }
 
@@ -216,6 +237,7 @@ inline BinaryTree::Arc BinaryTree::addArc(Node const & u, Node const & v)
     vigra_precondition(nodes_[v.id()].parent == -1,
             "BinaryTree::addArc(): The node v already has a parent.");
 
+    index_type arc_id = 2*u.id();
     NodeT & n = nodes_[u.id()];
     if (n.left_child == -1)
     {
@@ -224,12 +246,17 @@ inline BinaryTree::Arc BinaryTree::addArc(Node const & u, Node const & v)
     else if (n.right_child == -1)
     {
         n.right_child = v.id();
+        ++arc_id;
     }
     else
     {
         vigra_fail("BinaryTree::addArc(): The node u already has two children.");
     }
     nodes_[v.id()].parent = u.id();
+
+    ++num_arcs_;
+    root_changed_ = true;
+    return Arc(arc_id);
 }
 
 inline void BinaryTree::erase(Node const & node)
@@ -237,17 +264,19 @@ inline void BinaryTree::erase(Node const & node)
     index_type id = node.id();
     NodeT & n = nodes_[id];
 
-    // erase the node as parent of its children
+    // Erase the node as parent of its children.
     if (n.left_child != -1)
     {
         nodes_[n.left_child].parent = -1;
+        --num_arcs_;
     }
     if (n.right_child != -1)
     {
         nodes_[n.right_child].parent = -1;
+        --num_arcs_;
     }
 
-    // erase the node as child of its parent
+    // Erase the node as child of its parent.
     if (n.parent != -1)
     {
         if (nodes_[n.parent].left_child == id)
@@ -262,9 +291,10 @@ inline void BinaryTree::erase(Node const & node)
         {
             vigra_fail("BinaryTree::erase(): The node is not registered as child of its parent.");
         }
+        --num_arcs_;
     }
 
-    // erase the node itself
+    // Erase the node itself.
     if (n.next != -1)
     {
         nodes_[n.next].prev = n.prev;
@@ -281,6 +311,8 @@ inline void BinaryTree::erase(Node const & node)
     n.next = first_free_node_;
     first_free_node_ = id;
     n.prev = -2;
+    --num_nodes_;
+    root_changed_ = true;
 }
 
 inline void BinaryTree::erase(Arc const & arc)
@@ -298,6 +330,8 @@ inline void BinaryTree::erase(Arc const & arc)
         nodes_[src.right_child].parent = -1;
         src.right_child = -1;
     }
+    --num_arcs_;
+    root_changed_ = true;
 }
 
 inline BinaryTree::Node BinaryTree::source(Arc const & arc) const
@@ -341,14 +375,12 @@ inline BinaryTree::Arc BinaryTree::arcFromId(index_type const & id) const
 
 inline size_t BinaryTree::numNodes() const
 {
-    // TODO: Implement this.
-    vigra_fail("BinaryTree::numNodes(): Not implemented yet.");
+    return num_nodes_;
 }
 
 inline size_t BinaryTree::numArcs() const
 {
-    // TODO: Implement this.
-    vigra_fail("BinaryTree::numArcs(): Not implemented yet.");
+    return num_arcs_;
 }
 
 inline size_t BinaryTree::inDegree(Node const & node) const
@@ -445,8 +477,25 @@ inline size_t BinaryTree::numLeaves() const
 
 inline BinaryTree::Node BinaryTree::getRoot() const
 {
-    // TODO: Implement.
-    vigra_fail("Not implemented yet.");
+    if (root_changed_)
+    {
+        index_type current = first_node_;
+        while (current != -1)
+        {
+            if (nodes_[current].parent == -1)
+            {
+                root_changed_ = false;
+                root_node_ = current;
+                return Node(root_node_);
+            }
+            current = nodes_[current].next;
+        }
+        vigra_fail("BinaryTree::getRoot(): The tree has no root.");
+    }
+    else
+    {
+        return Node(root_node_);
+    }
 }
 
 inline BinaryTree::Node BinaryTree::getLeafNode(size_t i) const
