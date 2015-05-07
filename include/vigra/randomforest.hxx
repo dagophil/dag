@@ -751,11 +751,63 @@ void RandomForest0<FEATURES, LABELS>::predict(
 
 
 
-class ModularDecisionTree
+
+
+
+class BootstrapSampler
 {
+
+public:
+
+    BootstrapSampler()
+    {
+        UniformIntRandomFunctor<MersenneTwister> rand_;
+    }
 
 };
 
+
+
+template <typename FEATURETYPE, typename LABELTYPE>
+class ModularDecisionTree
+{
+
+public:
+
+    typedef FEATURETYPE FeatureType;
+    typedef LABELTYPE LabelType;
+    typedef BinaryTree Graph;
+    typedef Graph::Node Node;
+
+    template <typename FEATURES, typename LABELS, typename SAMPLER>
+    void train(
+            FEATURES const & data_x,
+            LABELS const & data_y
+    );
+
+protected:
+
+    Graph graph_;
+
+};
+
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS, typename SAMPLER>
+void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
+        FEATURES const & data_x,
+        LABELS const & data_y
+){
+    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+                  "ModularDecisionTree::train(): Wrong feature type.");
+    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+                  "ModularDecisionTree::train(): Wrong label type.");
+
+
+
+
+
+    vigra_fail("Not implemented yet.");
+}
 
 
 
@@ -767,6 +819,7 @@ public:
 
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
+    typedef ModularDecisionTree<FeatureType, LabelType> Tree;
 
     ModularRandomForest() = default;
     ModularRandomForest(ModularRandomForest const &) = default;
@@ -775,7 +828,7 @@ public:
     ModularRandomForest & operator=(ModularRandomForest const &) = default;
     ModularRandomForest & operator=(ModularRandomForest &&) = default;
 
-    template <typename FEATURES, typename LABELS>
+    template <typename FEATURES, typename LABELS, typename SAMPLER>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y,
@@ -790,14 +843,14 @@ public:
 
 protected:
 
-    std::vector<ModularDecisionTree> trees_;
+    std::vector<Tree> trees_;
 
 };
 
 
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS>
+template <typename FEATURES, typename LABELS, typename SAMPLER>
 void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
@@ -808,7 +861,12 @@ void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
     static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
                   "ModularRandomForest::train(): Wrong label type.");
 
-    vigra_fail("Not implemented yet.");
+    trees_.resize(num_trees);
+    for (size_t i = 0; i < trees_.size(); ++i)
+    {
+        std::cout << "training tree " << i << std::endl;
+        trees_[i].train<FEATURES, LABELS, SAMPLER>(data_x, data_y);
+    }
 }
 
 template <typename FEATURETYPE, typename LABELTYPE>
