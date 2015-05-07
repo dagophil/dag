@@ -6,6 +6,7 @@
 #include <vigra/iteratorfacade.hxx>
 #include <queue>
 #include <map>
+#include <type_traits>
 
 //#include "dagraph.hxx"
 #include "jungle.hxx"
@@ -389,12 +390,16 @@ protected:
     /// \param data_y: The labels.
     /// \param[out] n0: The first child node.
     /// \param[out] n1: The second child node.
+    /// \param label_buffer0: Buffer storage for labels.
+    /// \param label_buffer1: Buffer storage for labels.
     void split(
             Node const & node,
             FEATURES const & data_x,
             LABELS const & data_y,
             Node & n0,
-            Node & n1
+            Node & n1,
+            std::vector<size_t> & label_buffer0,
+            std::vector<size_t> & label_buffer1
     );
 
     /// \brief The graph structure.
@@ -439,6 +444,11 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::train(
     instance_ranges_[rootnode] = {instance_indices_.begin(), instance_indices_.end()};
     node_queue.push(rootnode);
 
+    // The buffer vectors are used to count the labels and label priors in each split.
+    // They are created here so the vectors dont need to be allocated in each split.
+    std::vector<size_t> label_buffer0;
+    std::vector<size_t> label_buffer1;
+
     // Split the nodes.
     while (!node_queue.empty())
     {
@@ -446,7 +456,7 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::train(
         node_queue.pop();
 
         Node n0, n1;
-        split(node, data_x, data_y, n0, n1);
+        split(node, data_x, data_y, n0, n1, label_buffer0, label_buffer1);
         if (tree_.valid(n0))
             node_queue.push(n0);
         if (tree_.valid(n1))
@@ -490,15 +500,13 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
         FEATURES const & data_x,
         LABELS const & data_y,
         Node & n0,
-        Node & n1
+        Node & n1,
+        std::vector<size_t> & label_buffer0,
+        std::vector<size_t> & label_buffer1
 ){
     auto const inst_begin = instance_ranges_[node].begin;
     auto const inst_end = instance_ranges_[node].end;
     auto const num_instances = std::distance(inst_begin, inst_end);
-
-//    // TODO: Remove output.
-//    std::cout << "splitting node " << node << " with "
-//              << num_instances << " instances" << std::endl;
 
     // Check whether the given node is pure.
     {
@@ -537,14 +545,13 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     detail::sample_without_replacement(num_feats, all_feat_indices.begin(), all_feat_indices.end(), std::back_inserter(feat_indices));
 
     // Compute the prior label count.
-    // Note: A map would be more natural, but a vector offers faster access.
-    std::vector<size_t> label_priors;
+    std::fill(label_buffer0.begin(), label_buffer0.end(), 0);
     for (InstanceIterator it(inst_begin); it != inst_end; ++it)
     {
         size_t const l = static_cast<size_t>(data_y[*it]);
-        if (l >= label_priors.size())
-            label_priors.resize(l+1);
-        ++label_priors[l];
+        if (l >= label_buffer0.size())
+            label_buffer0.resize(l+1);
+        ++label_buffer0[l];
     }
 
     // Find the best split.
@@ -561,9 +568,8 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
                 }
         );
 
-        // This vector keeps track of the labels of the instances that are assigned to the left child.
-        // Note: A map would be more natural, but a vector offers faster access.
-        std::vector<size_t> labels_left;
+        // Clear the label counter.
+        std::fill(label_buffer1.begin(), label_buffer1.end(), 0);
 
         // Compute the gini impurity of each split.
         size_t first_right_index = 0; // index of the first instance that is assigned to the right child
@@ -580,15 +586,15 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
             do
             {
                 size_t const new_label = static_cast<size_t>(data_y[*(inst_begin+first_right_index)]);
-                if (new_label >= labels_left.size())
-                    labels_left.resize(new_label+1);
-                ++labels_left[new_label];
+                if (new_label >= label_buffer1.size())
+                    label_buffer1.resize(new_label+1);
+                ++label_buffer1[new_label];
                 ++first_right_index;
             }
             while (features[*(inst_begin+first_right_index)] < s);
 
             // Compute the gini.
-            float const gini = detail::gini_impurity(labels_left, label_priors);
+            float const gini = detail::gini_impurity(label_buffer1, label_buffer0);
             if (gini < best_gini)
             {
                 best_gini = gini;
@@ -614,9 +620,6 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
     is_left_node[n0] = true;
     is_left_node[n1] = false;
     node_splits_[node] = {best_feat, best_split};
-
-//    // TODO: Remove output.
-//    std::cout << "divided into " << std::distance(begin, split_iter) << " and " << std::distance(split_iter, end) << std::endl;
 }
 
 
@@ -639,8 +642,8 @@ public:
 //    template <typename VALUE_TYPE>
 //    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
 
-    template <typename VALUE_TYPE>
-    using NodeMap = Tree::template NodeMap<VALUE_TYPE>;
+//    template <typename VALUE_TYPE>
+//    using NodeMap = Tree::template NodeMap<VALUE_TYPE>;
 
     RandomForest0() = default;
     RandomForest0(RandomForest0 const &) = default;
@@ -715,12 +718,12 @@ void RandomForest0<FEATURES, LABELS>::predict(
         auto label_view = labels.template bind<1>(i);
         dtrees_[i].predict(test_x, label_view);
     }
-
+    std::vector<size_t> label_counts_vec;
     // Find the majority vote.
     for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
         // Count the labels.
-        std::vector<size_t> label_counts_vec;
+        label_counts_vec.resize(0);
         for (size_t k = 0; k < dtrees_.size(); ++k)
         {
             LabelType const label = labels[Shape2(i, k)];
@@ -744,6 +747,82 @@ void RandomForest0<FEATURES, LABELS>::predict(
         // Write the label in the output array.
         pred_y[i] = max_label;
     }
+}
+
+
+
+class ModularDecisionTree
+{
+
+};
+
+
+
+
+template <typename FEATURETYPE, typename LABELTYPE>
+class ModularRandomForest
+{
+
+public:
+
+    typedef FEATURETYPE FeatureType;
+    typedef LABELTYPE LabelType;
+
+    ModularRandomForest() = default;
+    ModularRandomForest(ModularRandomForest const &) = default;
+    ModularRandomForest(ModularRandomForest &&) = default;
+    ~ModularRandomForest() = default;
+    ModularRandomForest & operator=(ModularRandomForest const &) = default;
+    ModularRandomForest & operator=(ModularRandomForest &&) = default;
+
+    template <typename FEATURES, typename LABELS>
+    void train(
+            FEATURES const & data_x,
+            LABELS const & data_y,
+            size_t num_trees
+    );
+
+    template <typename FEATURES, typename LABELS>
+    void predict(
+            FEATURES const & data_x,
+            LABELS & data_y
+    ) const;
+
+protected:
+
+    std::vector<ModularDecisionTree> trees_;
+
+};
+
+
+
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS>
+void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
+        FEATURES const & data_x,
+        LABELS const & data_y,
+        size_t num_trees
+){
+    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+                  "ModularRandomForest::train(): Wrong feature type.");
+    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+                  "ModularRandomForest::train(): Wrong label type.");
+
+    vigra_fail("Not implemented yet.");
+}
+
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS>
+void ModularRandomForest<FEATURETYPE, LABELTYPE>::predict(
+        FEATURES const & data_x,
+        LABELS & data_y
+) const {
+    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+                  "ModularRandomForest::predict(): Wrong feature type.");
+    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+                  "ModularRandomForest::predict(): Wrong label type.");
+
+    vigra_fail("Not implemented yet.");
 }
 
 

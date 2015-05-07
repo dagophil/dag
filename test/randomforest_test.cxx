@@ -7,6 +7,98 @@
 
 
 
+template <typename S, typename T>
+void load_data(
+        std::string const & train_filename,
+        std::string const & test_filename,
+        vigra::MultiArray<2, S> & train_x,
+        vigra::MultiArray<1, T> & train_y,
+        vigra::MultiArray<2, S> & test_x,
+        vigra::MultiArray<1, T> & test_y,
+        std::vector<T> const & labels = {}
+){
+    using namespace vigra;
+
+    // Load the data.
+    MultiArray<2, S> tmp_train_x;
+    MultiArray<1, T> tmp_train_y;
+    MultiArray<2, S> tmp_test_x;
+    MultiArray<1, T> tmp_test_y;
+    HDF5ImportInfo info(train_filename.c_str(), "data");
+    tmp_train_x.reshape(Shape2(info.shape().begin()));
+    readHDF5(info, tmp_train_x);
+    info = HDF5ImportInfo(train_filename.c_str(), "labels");
+    tmp_train_y.reshape(Shape1(info.shape().begin()));
+    readHDF5(info, tmp_train_y);
+    info = HDF5ImportInfo(test_filename.c_str(), "data");
+    tmp_test_x.reshape(Shape2(info.shape().begin()));
+    readHDF5(info, tmp_test_x);
+    info = HDF5ImportInfo(test_filename.c_str(), "labels");
+    tmp_test_y.reshape(Shape1(info.shape().begin()));
+    readHDF5(info, tmp_test_y);
+
+    vigra_assert(tmp_train_x.shape()[0] == tmp_train_y.size(), "Wrong number of training instances.");
+    vigra_assert(tmp_test_x.shape()[0] == tmp_test_y.size(), "Wrong number of test instances.");
+
+    if (labels.size() == 0)
+    {
+        train_x = tmp_train_x;
+        train_y = tmp_train_y;
+        test_x = tmp_test_x;
+        test_y = tmp_test_y;
+        return;
+    }
+
+    // Restrict the training data to the given label subset.
+    std::vector<size_t> train_indices;
+    for (size_t i = 0; i < tmp_train_y.size(); ++i)
+    {
+        for (auto const & label : labels)
+        {
+            if (tmp_train_y[i] == label)
+            {
+                train_indices.push_back(i);
+                break;
+            }
+        }
+    }
+    train_x.reshape(Shape2(train_indices.size(), tmp_train_x.shape()[1]));
+    train_y.reshape(Shape1(train_indices.size()));
+    for (size_t i = 0; i < train_x.shape()[0]; ++i)
+    {
+        for (size_t k = 0; k < train_x.shape()[1]; ++k)
+        {
+            train_x(i, k) = tmp_train_x(train_indices[i], k);
+        }
+        train_y[i] = tmp_train_y[train_indices[i]];
+    }
+
+    // Restrict the test data to the given label subset.
+    std::vector<size_t> test_indices;
+    for (size_t i = 0; i < tmp_test_y.size(); ++i)
+    {
+        for (auto const & label : labels)
+        {
+            if (tmp_test_y[i] == label)
+            {
+                test_indices.push_back(i);
+                break;
+            }
+        }
+    }
+    test_x.reshape(Shape2(test_indices.size(), tmp_test_x.shape()[1]));
+    test_y.reshape(Shape1(test_indices.size()));
+    for (size_t i = 0; i < test_x.shape()[0]; ++i)
+    {
+        for (size_t k = 0; k < test_x.shape()[1]; ++k)
+        {
+            test_x(i, k) = tmp_test_x(test_indices[i], k);
+        }
+        test_y[i] = tmp_test_y[test_indices[i]];
+    }
+}
+
+
 void test_randomforest0()
 {
     using namespace vigra;
@@ -78,56 +170,12 @@ void test_randomforest0()
         // Load some data.
         std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
         std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+        std::vector<UInt8> labels = {3, 8};
         MultiArray<2, float> train_x;
         MultiArray<1, UInt8> train_y;
         MultiArray<2, float> test_x;
         MultiArray<1, UInt8> test_y;
-        HDF5ImportInfo info(train_filename.c_str(), "data");
-        train_x.reshape(Shape2(info.shape().begin()));
-        readHDF5(info, train_x);
-        info = HDF5ImportInfo(train_filename.c_str(), "labels");
-        train_y.reshape(Shape1(info.shape().begin()));
-        readHDF5(info, train_y);
-        info = HDF5ImportInfo(test_filename.c_str(), "data");
-        test_x.reshape(Shape2(info.shape().begin()));
-        readHDF5(info, test_x);
-        info = HDF5ImportInfo(test_filename.c_str(), "labels");
-        test_y.reshape(Shape1(info.shape().begin()));
-        readHDF5(info, test_y);
-
-        // Only look at threes and eights.
-        std::vector<size_t> train_indices;
-        for (size_t i = 0; i < train_y.size(); ++i)
-        {
-            if (train_y[i] == 3 || train_y[i] == 8)
-                train_indices.push_back(i);
-        }
-        MultiArray<2, float> train_x_sub(Shape2(train_indices.size(), train_x.shape()[1]));
-        MultiArray<1, UInt8> train_y_sub(Shape1(train_indices.size()));
-        for (size_t i = 0; i < train_indices.size(); ++i)
-        {
-            for (size_t k = 0; k < train_x.shape()[1]; ++k)
-            {
-                train_x_sub[Shape2(i, k)] = train_x[Shape2(train_indices[i], k)];
-                train_y_sub[i] = train_y[train_indices[i]];
-            }
-        }
-        std::vector<size_t> test_indices;
-        for (size_t i = 0; i < test_y.size(); ++i)
-        {
-            if (test_y[i] == 3 || test_y[i] == 8)
-                test_indices.push_back(i);
-        }
-        MultiArray<2, float> test_x_sub(Shape2(test_indices.size(), test_x.shape()[1]));
-        MultiArray<1, UInt8> test_y_sub(Shape1(test_indices.size()));
-        for (size_t i = 0; i < test_indices.size(); ++i)
-        {
-            for (size_t k = 0; k < test_x.shape()[1]; ++k)
-            {
-                test_x_sub[Shape2(i, k)] = test_x[Shape2(test_indices[i], k)];
-                test_y_sub[i] = test_y[test_indices[i]];
-            }
-        }
+        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
 
         /*
         // Old implementation.
@@ -149,20 +197,20 @@ void test_randomforest0()
 
         // Train a random forest.
         RandomForest0<Features, Labels> rf;
-        Features train_feats(train_x_sub);
-        Labels train_labels(train_y_sub);
+        Features train_feats(train_x);
+        Labels train_labels(train_y);
         rf.train(train_feats, train_labels, 100);
 
         // Predict using the forest.
-        MultiArray<1, UInt8> pred_y(test_y_sub.shape());
-        Features test_feats(test_x_sub);
+        MultiArray<1, UInt8> pred_y(test_y.shape());
+        Features test_feats(test_x);
         rf.predict(test_feats, pred_y);
 
         // Count the correct predicted instances.
         size_t count = 0;
-        for (size_t i = 0; i < test_y_sub.size(); ++i)
+        for (size_t i = 0; i < test_y.size(); ++i)
         {
-            if (pred_y[i] == test_y_sub[i])
+            if (pred_y[i] == test_y[i])
                 ++count;
         }
         std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
@@ -172,7 +220,48 @@ void test_randomforest0()
     std::cout << "test_randomforest0(): Success!" << std::endl;
 }
 
+void test_modularrandomforest()
+{
+    using namespace vigra;
+
+    typedef float S;
+    typedef UInt8 T;
+    typedef FeatureGetter<S> Features;
+    typedef LabelGetter<T> Labels;
+
+    {
+        // Load some data.
+        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+        std::vector<T> labels = {3, 8};
+        MultiArray<2, S> train_x;
+        MultiArray<1, T> train_y;
+        MultiArray<2, S> test_x;
+        MultiArray<1, T> test_y;
+        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
+
+        ModularRandomForest<S, T> rf;
+        Features train_feats(train_x);
+        Labels train_labels(train_y);
+        rf.train(train_feats, train_labels, 100);
+
+        Features test_feats(test_x);
+        MultiArray<1, T> pred_y;
+        rf.predict(test_feats, pred_y);
+    }
+
+
+
+
+
+    std::cout << "test_modularrandomforest(): Success!" << std::endl;
+}
+
+
+
+
 int main()
 {
-    test_randomforest0();
+//    test_randomforest0();
+    test_modularrandomforest();
 }

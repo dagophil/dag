@@ -118,6 +118,7 @@ namespace detail
 
 
 
+/// \todo: Change to n-tree (so binary tree is a 2-tree).
 class BinaryTree
 {
 public:
