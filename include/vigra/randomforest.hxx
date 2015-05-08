@@ -805,6 +805,13 @@ protected:
 
 };
 
+class RandomSplitVisitor
+{
+
+};
+
+
+
 
 
 template <typename FEATURETYPE, typename LABELTYPE>
@@ -822,7 +829,7 @@ public:
     template <typename T>
     using NodeMap = Graph::NodeMap<T>;
 
-    template <typename FEATURES, typename LABELS, typename SAMPLER>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y
@@ -841,12 +848,13 @@ protected:
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
 void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y
 ){
     typedef SAMPLER Sampler;
+    typedef SPLITVISITOR SplitVisitor;
 
     static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
                   "ModularDecisionTree::train(): Wrong feature type.");
@@ -872,10 +880,11 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
         auto const node = node_queue_.front();
         node_queue_.pop();
 
-        // TODO: Split the node and put the children in the queue.
-
-
-
+        // TODO:
+        // (1) Draw sample from node.
+        // (2) Check termination criterion on the sample.
+        // (3) Split the node.
+        // (4) Put children in the queue.
     }
     vigra_fail("Not implemented yet.");
 }
@@ -899,7 +908,7 @@ public:
     ModularRandomForest & operator=(ModularRandomForest const &) = default;
     ModularRandomForest & operator=(ModularRandomForest &&) = default;
 
-    template <typename FEATURES, typename LABELS, typename SAMPLER>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y,
@@ -921,7 +930,7 @@ protected:
 
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
 void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
@@ -936,7 +945,7 @@ void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
     for (size_t i = 0; i < trees_.size(); ++i)
     {
         std::cout << "training tree " << i << std::endl;
-        trees_[i].train<FEATURES, LABELS, SAMPLER>(data_x, data_y);
+        trees_[i].train<FEATURES, LABELS, SAMPLER, SPLITVISITOR>(data_x, data_y);
     }
 }
 
