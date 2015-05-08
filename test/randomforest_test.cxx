@@ -229,6 +229,7 @@ void test_modularrandomforest()
     typedef FeatureGetter<S> Features;
     typedef LabelGetter<T> Labels;
     typedef BootstrapSampler Sampler;
+    typedef PurityTerminationVisitor<Labels> TermVisitor;
     typedef RandomSplitVisitor SplitVisitor;
 
     {
@@ -245,7 +246,7 @@ void test_modularrandomforest()
         ModularRandomForest<S, T> rf;
         Features train_feats(train_x);
         Labels train_labels(train_y);
-        rf.train<Features, Labels, Sampler, SplitVisitor>(train_feats, train_labels, 10);
+        rf.train<Features, Labels, Sampler, TermVisitor, SplitVisitor>(train_feats, train_labels, 10);
 
         Features test_feats(test_x);
         MultiArray<1, T> pred_y;

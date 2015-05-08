@@ -779,6 +779,7 @@ public:
     typedef std::vector<size_t>::const_iterator const_iterator;
     typedef UniformIntRandomFunctor<MersenneTwister> Random;
 
+    /// \brief Create the bootstrap samples.
     explicit BootstrapSampler(size_t const num_instances)
         : rand_(),
           instances_(num_instances)
@@ -789,12 +790,20 @@ public:
         }
     }
 
+    /// \brief Return the bootstrap sample that was created in the constructor.
     template <typename ITER>
-    void bootstrap(ITER & begin, ITER & middle, ITER & end)
+    void bootstrap_sample(ITER & begin, ITER & middle, ITER & end)
     {
         begin = instances_.begin();
         middle = instances_.end();
         end = instances_.end();
+    }
+
+    /// \brief Return all instances from begin to end.
+    template <typename ITER>
+    void split_sample(ITER & begin, ITER & middle, ITER & end)
+    {
+        middle = end;
     }
 
 protected:
@@ -805,12 +814,61 @@ protected:
 
 };
 
+
+
+template <typename LABELS>
+class PurityTerminationVisitor
+{
+public:
+
+    PurityTerminationVisitor(LABELS const & data_y)
+        : labels_(data_y),
+          stop_(true)
+    {}
+
+    template <typename TREE>
+    void visit(TREE const & tree)
+    {
+        stop_ = true;
+        auto begin = tree.node_sample_begin();
+        auto end = tree.node_sample_end();
+        if (std::distance(begin, end) < 2)
+        {
+            return;
+        }
+
+        auto const first_label = labels_[*begin];
+        ++begin;
+        while (begin != end)
+        {
+            if (labels_[*begin] != first_label)
+            {
+                stop_ = false;
+                return;
+            }
+            ++begin;
+        }
+    }
+
+    bool stop() const
+    {
+        return stop_;
+    }
+
+protected:
+
+    LABELS const & labels_;
+
+    /// \brief Whether to stop or continue after the visit.
+    bool stop_;
+};
+
+
+
 class RandomSplitVisitor
 {
 
 };
-
-
 
 
 
@@ -824,16 +882,27 @@ public:
     typedef LABELTYPE LabelType;
     typedef BinaryTree Graph;
     typedef Graph::Node Node;
-    typedef detail::IterTriple<std::vector<size_t>::const_iterator> IterTriple;
+    typedef std::vector<size_t>::iterator iterator;
+    typedef detail::IterTriple<iterator> IterTriple;
 
     template <typename T>
     using NodeMap = Graph::NodeMap<T>;
 
-    template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y
     );
+
+    iterator node_sample_begin() const
+    {
+        return node_sample_.begin;
+    }
+
+    iterator node_sample_end() const
+    {
+        return node_sample_.end;
+    }
 
 protected:
 
@@ -845,15 +914,19 @@ protected:
     /// \brief The instances of each node.
     NodeMap<IterTriple> instances_;
 
+    /// \brief The instance sample of the current node in training.
+    IterTriple node_sample_;
+
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
 void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y
 ){
     typedef SAMPLER Sampler;
+    typedef TERMINATIONVISITOR TermVisitor;
     typedef SPLITVISITOR SplitVisitor;
 
     static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
@@ -868,23 +941,42 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
     // Create the bootstrap sample.
     Sampler sampler(num_instances);
     IterTriple bootstrap_sample;
-    sampler.bootstrap(bootstrap_sample.begin, bootstrap_sample.middle, bootstrap_sample.end);
+    sampler.bootstrap_sample(bootstrap_sample.begin, bootstrap_sample.middle, bootstrap_sample.end);
 
     // Create the queue with the nodes to be split and place the root node with the bootstrap samples inside.
     auto const rootnode = graph_.addNode();
-    instances_[rootnode] = bootstrap_sample;
-
+    instances_[rootnode] = bootstrap_sample; // TODO: Maybe use std::move here.
     node_queue_.push(rootnode);
+
+    // Split the nodes.
+    TermVisitor term_visitor(data_y);
     while (!node_queue_.empty())
     {
+        // Get the next node.
         auto const node = node_queue_.front();
         node_queue_.pop();
 
-        // TODO:
-        // (1) Draw sample from node.
-        // (2) Check termination criterion on the sample.
-        // (3) Split the node.
-        // (4) Put children in the queue.
+        // Draw a random sample of the instances.
+        node_sample_ = instances_[node]; // TODO: This should be copy-assignment. Is the syntax correct?
+        sampler.split_sample(node_sample_.begin, node_sample_.middle, node_sample_.end);
+
+        // Check the termination criterion.
+        term_visitor.visit(*this);
+        if (term_visitor.stop())
+        {
+            // Termination criterion is fulfilled.
+
+            // TODO:
+            // Save the instance labels and do not split further.
+        }
+        else
+        {
+            // Termination criterion is not fulfilled.
+
+            // TODO:
+            // Split the node.
+            // Put children in the queue.
+        }
     }
     vigra_fail("Not implemented yet.");
 }
@@ -908,7 +1000,7 @@ public:
     ModularRandomForest & operator=(ModularRandomForest const &) = default;
     ModularRandomForest & operator=(ModularRandomForest &&) = default;
 
-    template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y,
@@ -930,7 +1022,7 @@ protected:
 
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER, typename SPLITVISITOR>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
 void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
@@ -945,7 +1037,7 @@ void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
     for (size_t i = 0; i < trees_.size(); ++i)
     {
         std::cout << "training tree " << i << std::endl;
-        trees_[i].train<FEATURES, LABELS, SAMPLER, SPLITVISITOR>(data_x, data_y);
+        trees_[i].train<FEATURES, LABELS, SAMPLER, TERMINATIONVISITOR, SPLITVISITOR>(data_x, data_y);
     }
 }
 
