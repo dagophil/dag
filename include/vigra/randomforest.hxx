@@ -25,6 +25,16 @@ namespace detail
         Iter end;
     };
 
+    template <typename ITER>
+    struct IterTriple
+    {
+    public:
+        typedef ITER Iter;
+        Iter begin;
+        Iter middle;
+        Iter end;
+    };
+
     template <typename FEATURETYPE>
     struct Split
     {
@@ -328,6 +338,12 @@ public:
 
     /// \brief Return the number of instances.
     size_t size() const
+    {
+        return arr_.size();
+    }
+
+    /// \brief Return the number of instances.
+    size_t num_instances() const
     {
         return arr_.size();
     }
@@ -759,10 +775,33 @@ class BootstrapSampler
 
 public:
 
-    BootstrapSampler()
+    typedef std::vector<size_t>::iterator iterator;
+    typedef std::vector<size_t>::const_iterator const_iterator;
+    typedef UniformIntRandomFunctor<MersenneTwister> Random;
+
+    explicit BootstrapSampler(size_t const num_instances)
+        : rand_(),
+          instances_(num_instances)
     {
-        UniformIntRandomFunctor<MersenneTwister> rand_;
+        for (size_t i = 0; i < instances_.size(); ++i)
+        {
+            instances_[i] = rand_() % num_instances;
+        }
     }
+
+    template <typename ITER>
+    void bootstrap(ITER & begin, ITER & middle, ITER & end)
+    {
+        begin = instances_.begin();
+        middle = instances_.end();
+        end = instances_.end();
+    }
+
+protected:
+
+    Random rand_;
+
+    std::vector<size_t> instances_;
 
 };
 
@@ -778,6 +817,10 @@ public:
     typedef LABELTYPE LabelType;
     typedef BinaryTree Graph;
     typedef Graph::Node Node;
+    typedef detail::IterTriple<std::vector<size_t>::const_iterator> IterTriple;
+
+    template <typename T>
+    using NodeMap = Graph::NodeMap<T>;
 
     template <typename FEATURES, typename LABELS, typename SAMPLER>
     void train(
@@ -789,6 +832,12 @@ protected:
 
     Graph graph_;
 
+    /// \brief The node queue used in training.
+    std::queue<Node> node_queue_;
+
+    /// \brief The instances of each node.
+    NodeMap<IterTriple> instances_;
+
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
@@ -797,15 +846,37 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y
 ){
+    typedef SAMPLER Sampler;
+
     static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
                   "ModularDecisionTree::train(): Wrong feature type.");
     static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
                   "ModularDecisionTree::train(): Wrong label type.");
 
+    size_t num_instances = data_x.num_instances();
+    vigra_precondition(num_instances == data_y.num_instances(),
+                       "ModularDecisionTree::train(): Input has wrong shape.");
+
+    // Create the bootstrap sample.
+    Sampler sampler(num_instances);
+    IterTriple bootstrap_sample;
+    sampler.bootstrap(bootstrap_sample.begin, bootstrap_sample.middle, bootstrap_sample.end);
+
+    // Create the queue with the nodes to be split and place the root node with the bootstrap samples inside.
+    auto const rootnode = graph_.addNode();
+    instances_[rootnode] = bootstrap_sample;
+
+    node_queue_.push(rootnode);
+    while (!node_queue_.empty())
+    {
+        auto const node = node_queue_.front();
+        node_queue_.pop();
+
+        // TODO: Split the node and put the children in the queue.
 
 
 
-
+    }
     vigra_fail("Not implemented yet.");
 }
 

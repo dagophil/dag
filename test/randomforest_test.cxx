@@ -244,7 +244,7 @@ void test_modularrandomforest()
         ModularRandomForest<S, T> rf;
         Features train_feats(train_x);
         Labels train_labels(train_y);
-        rf.train<Features, Labels, Sampler>(train_feats, train_labels, 100);
+        rf.train<Features, Labels, Sampler>(train_feats, train_labels, 10);
 
         Features test_feats(test_x);
         MultiArray<1, T> pred_y;
