@@ -871,6 +871,7 @@ public:
     typedef FEATURES Features;
     typedef LABELS Labels;
     typedef typename Labels::value_type LabelType;
+    typedef UniformIntRandomFunctor<MersenneTwister> Random;
 
     struct Split
     {
@@ -881,15 +882,31 @@ public:
     RandomSplitVisitor(Features const & features, Labels const & labels)
         : features_(features),
           labels_(labels),
-          split_({0, 0})
-    {}
+          split_({0, 0}),
+          feature_indices_(features.num_features()),
+          num_feats_(std::ceil(std::sqrt(features.num_features()))),
+          rand_()
+    {
+        std::iota(feature_indices_.begin(), feature_indices_.end(), 0);
+    }
 
     template <typename TREE>
     void visit(TREE const & tree)
     {
         std::cout << "split_visitor::visit()" << std::endl;
 
-//        vigra_fail("split_visitor::visit(): Not implemented yet.");
+        // Get a random subset of the features.
+        for (size_t i = 0; i < num_feats_; ++i)
+        {
+            size_t j = i + (rand_() % (num_feats_ - i));
+            std::swap(feature_indices_[i], feature_indices_[j]);
+        }
+
+
+
+
+
+        // TODO: Find best split.
     }
 
     template <typename ITER>
@@ -916,6 +933,13 @@ protected:
     Labels const & labels_;
 
     Split split_;
+
+    std::vector<size_t> feature_indices_;
+
+    size_t num_feats_;
+
+    Random rand_;
+
 };
 
 
@@ -954,6 +978,12 @@ public:
         return node_sample_.end;
     }
 
+    /// \brief Label counts of the instances in the left child node during training.
+    std::vector<size_t> labels_left;
+
+    /// \brief Label counts of the instances in the right child node during training.
+    std::vector<size_t> labels_right;
+
 protected:
 
     Graph graph_;
@@ -964,7 +994,7 @@ protected:
     /// \brief The instances of each node.
     NodeMap<IterRange> instances_;
 
-    /// \brief The instance sample of the current node in training.
+    /// \brief The instance sample of the current node during training.
     IterRange node_sample_;
 
     /// \brief The node labels that were found in training. (Majority label)
