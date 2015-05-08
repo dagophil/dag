@@ -25,16 +25,6 @@ namespace detail
         Iter end;
     };
 
-    template <typename ITER>
-    struct IterTriple
-    {
-    public:
-        typedef ITER Iter;
-        Iter begin;
-        Iter middle;
-        Iter end;
-    };
-
     template <typename FEATURETYPE>
     struct Split
     {
@@ -306,6 +296,16 @@ public:
     size_t num_features() const
     {
         return arr_.shape()[1];
+    }
+
+    reference operator()(size_t i, size_t j)
+    {
+        return arr_(i, j);
+    }
+
+    const_reference operator()(size_t i, size_t j) const
+    {
+        return arr_(i, j);
     }
 
 protected:
@@ -792,18 +792,16 @@ public:
 
     /// \brief Return the bootstrap sample that was created in the constructor.
     template <typename ITER>
-    void bootstrap_sample(ITER & begin, ITER & middle, ITER & end)
+    void bootstrap_sample(ITER & begin, ITER & end)
     {
         begin = instances_.begin();
-        middle = instances_.end();
         end = instances_.end();
     }
 
-    /// \brief Return all instances from begin to end.
+    /// \brief Return all of the given instances (hence do nothing).
     template <typename ITER>
-    void split_sample(ITER & begin, ITER & middle, ITER & end)
+    void split_sample(ITER & begin, ITER & end)
     {
-        middle = end;
     }
 
 protected:
@@ -865,9 +863,59 @@ protected:
 
 
 
+template <typename FEATURES, typename LABELS>
 class RandomSplitVisitor
 {
+public:
 
+    typedef FEATURES Features;
+    typedef LABELS Labels;
+    typedef typename Labels::value_type LabelType;
+
+    struct Split
+    {
+        size_t dim;
+        LabelType thresh;
+    };
+
+    RandomSplitVisitor(Features const & features, Labels const & labels)
+        : features_(features),
+          labels_(labels),
+          split_({0, 0})
+    {}
+
+    template <typename TREE>
+    void visit(TREE const & tree)
+    {
+        std::cout << "split_visitor::visit()" << std::endl;
+
+//        vigra_fail("split_visitor::visit(): Not implemented yet.");
+    }
+
+    template <typename ITER>
+    ITER apply_split(ITER const & begin, ITER const & end) const
+    {
+        Features const & features(features_);
+        Split const & split(split_);
+        return std::partition(begin, end,
+                [& features, & split](size_t i) {
+                    return features(i, split.dim) < split.thresh;
+                }
+        );
+    }
+
+    Split best_split() const
+    {
+        return split_;
+    }
+
+protected:
+
+    Features const & features_;
+
+    Labels const & labels_;
+
+    Split split_;
 };
 
 
@@ -883,10 +931,12 @@ public:
     typedef BinaryTree Graph;
     typedef Graph::Node Node;
     typedef std::vector<size_t>::iterator iterator;
-    typedef detail::IterTriple<iterator> IterTriple;
+    typedef detail::IterRange<iterator> IterRange;
 
     template <typename T>
     using NodeMap = Graph::NodeMap<T>;
+
+    ModularDecisionTree();
 
     template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
     void train(
@@ -912,12 +962,32 @@ protected:
     std::queue<Node> node_queue_;
 
     /// \brief The instances of each node.
-    NodeMap<IterTriple> instances_;
+    NodeMap<IterRange> instances_;
 
     /// \brief The instance sample of the current node in training.
-    IterTriple node_sample_;
+    IterRange node_sample_;
+
+    /// \brief The node labels that were found in training. (Majority label)
+    NodeMap<LabelType> node_main_label_;
+
+    /// \brief The node labels that were found in training. (Count of each label)
+    NodeMap<std::vector<size_t> > node_labels_; // TODO: Fill this map in training.
+
+    /// \brief The maximum label that was found in training.
+    LabelType max_label_;
 
 };
+
+template <typename FEATURETYPE, typename LABELTYPE>
+ModularDecisionTree<FEATURETYPE, LABELTYPE>::ModularDecisionTree()
+    : graph_(),
+      node_queue_(),
+      instances_(),
+      node_sample_(),
+      node_main_label_(),
+      node_labels_(),
+      max_label_(0)
+{}
 
 template <typename FEATURETYPE, typename LABELTYPE>
 template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
@@ -940,8 +1010,8 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
 
     // Create the bootstrap sample.
     Sampler sampler(num_instances);
-    IterTriple bootstrap_sample;
-    sampler.bootstrap_sample(bootstrap_sample.begin, bootstrap_sample.middle, bootstrap_sample.end);
+    IterRange bootstrap_sample;
+    sampler.bootstrap_sample(bootstrap_sample.begin, bootstrap_sample.end);
 
     // Create the queue with the nodes to be split and place the root node with the bootstrap samples inside.
     auto const rootnode = graph_.addNode();
@@ -950,6 +1020,7 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
 
     // Split the nodes.
     TermVisitor term_visitor(data_y);
+    SplitVisitor split_visitor(data_x, data_y);
     while (!node_queue_.empty())
     {
         // Get the next node.
@@ -958,27 +1029,53 @@ void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
 
         // Draw a random sample of the instances.
         node_sample_ = instances_[node]; // TODO: This should be copy-assignment. Is the syntax correct?
-        sampler.split_sample(node_sample_.begin, node_sample_.middle, node_sample_.end);
+        sampler.split_sample(node_sample_.begin, node_sample_.end);
 
         // Check the termination criterion.
         term_visitor.visit(*this);
         if (term_visitor.stop())
         {
-            // Termination criterion is fulfilled.
+            // Stop splitting and save the node labels.
 
-            // TODO:
-            // Save the instance labels and do not split further.
+            // Save the labels of the instances in the node.
+            std::vector<size_t> label_count(max_label_, 0);
+            LabelType best_label = 0;
+            size_t best_count = 0;
+            for (auto it = node_sample_.begin; it != node_sample_.end; ++it)
+            {
+                size_t count = ++label_count[*it];
+                if (count > best_count)
+                {
+                    best_count = count;
+                    best_label = *it;
+                }
+            }
+            node_main_label_[node] = best_label;
+            node_labels_[node] = label_count; // TODO: Maybe use std::move here.
         }
         else
         {
-            // Termination criterion is not fulfilled.
-
-            // TODO:
             // Split the node.
-            // Put children in the queue.
+            split_visitor.visit(*this);
+            auto const split_iter = split_visitor.apply_split(node_sample_.begin, node_sample_.end);
+
+            // TODO: Remove output.
+            auto const split = split_visitor.best_split();
+            std::cout << "dim: " << split.dim << std::endl;
+            std::cout << "thresh: " << split.thresh << std::endl;
+
+            // Create the new nodes.
+            Node left_node = graph_.addNode();
+            Node right_node = graph_.addNode();
+            graph_.addArc(node, left_node);
+            graph_.addArc(node, right_node);
+            instances_[left_node] = {node_sample_.begin, split_iter};
+            instances_[right_node] = {split_iter, node_sample_.end};
+            // TODO: Place the nodes in the queue.
+//            node_queue_.push(left_node);
+//            node_queue_.push(right_node);
         }
     }
-    vigra_fail("Not implemented yet.");
 }
 
 
