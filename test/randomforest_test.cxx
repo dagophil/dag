@@ -230,7 +230,7 @@ void test_modularrandomforest()
     typedef LabelGetter<T> Labels;
     typedef BootstrapSampler Sampler;
     typedef PurityTerminationVisitor<Labels> TermVisitor;
-    typedef RandomSplitVisitor<Features, Labels> SplitVisitor;
+    typedef RandomSplitVisitor<Features, Labels, GiniScorer> SplitVisitor;
 
     {
         // Load some data.

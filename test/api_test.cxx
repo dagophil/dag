@@ -128,6 +128,17 @@ void test_binary_tree()
         ab = tree.addArc(na, nc);
     }
 
+    // Test the property map.
+    {
+        Tree::NodeMap<int> map;
+        map[na] = 6;
+        map[nb] = 7;
+        map[ne] = 1;
+        vigra_assert(map[na] == 6 && map[nb] == 7 && map[ne] == 1, "Error in BinaryTree::NodeMap.");
+
+        // TODO: Maybe improve this test.
+    }
+
     std::cout << "test_binary_tree(): Success!" << std::endl;
 }
 
