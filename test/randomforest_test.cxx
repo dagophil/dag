@@ -103,8 +103,10 @@ void test_randomforest0()
 {
     using namespace vigra;
 
-    typedef FeatureGetter<float> Features;
-    typedef LabelGetter<UInt8> Labels;
+    typedef float FeatureType;
+    typedef UInt8 LabelType;
+    typedef FeatureGetter<FeatureType> Features;
+    typedef LabelGetter<LabelType> Labels;
 
     // Test sample_with_replacement().
     {
@@ -170,11 +172,11 @@ void test_randomforest0()
         // Load some data.
         std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
         std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
-        std::vector<UInt8> labels = {3, 8};
-        MultiArray<2, float> train_x;
-        MultiArray<1, UInt8> train_y;
-        MultiArray<2, float> test_x;
-        MultiArray<1, UInt8> test_y;
+        std::vector<LabelType> labels = {3, 8};
+        MultiArray<2, FeatureType> train_x;
+        MultiArray<1, LabelType> train_y;
+        MultiArray<2, FeatureType> test_x;
+        MultiArray<1, LabelType> test_y;
         load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
 
         /*
@@ -196,13 +198,13 @@ void test_randomforest0()
         */
 
         // Train a random forest.
-        RandomForest0<Features, Labels> rf;
+        RandomForest0<FeatureType, LabelType> rf;
         Features train_feats(train_x);
         Labels train_labels(train_y);
         rf.train(train_feats, train_labels, 100);
 
         // Predict using the forest.
-        MultiArray<1, UInt8> pred_y(test_y.shape());
+        MultiArray<1, LabelType> pred_y(test_y.shape());
         Features test_feats(test_x);
         rf.predict(test_feats, pred_y);
 
@@ -265,6 +267,6 @@ void test_modularrandomforest()
 
 int main()
 {
-//    test_randomforest0();
-    test_modularrandomforest();
+    test_randomforest0();
+//    test_modularrandomforest();
 }

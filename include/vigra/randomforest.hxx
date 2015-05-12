@@ -367,21 +367,16 @@ protected:
 
 
 /// \brief Simple decision tree class.
-template <typename TREE, typename FEATURES, typename LABELS>
+template <typename FEATURETYPE, typename LABELTYPE>
 class DecisionTree0
 {
 public:
 
-    typedef TREE Tree;
+    typedef BinaryTree Tree;
     typedef typename Tree::Node Node;
-    typedef FEATURES Features;
-    typedef typename Features::value_type FeatureType;
-    typedef LABELS Labels;
-    typedef typename Labels::value_type LabelType;
+    typedef FEATURETYPE FeatureType;
+    typedef LABELTYPE LabelType;
     typedef detail::Split<FeatureType> Split;
-
-//    template <typename T>
-//    using PropertyMap = typename Forest::template PropertyMap<T>;
 
     template <typename T>
     using NodeMap = typename Tree::template NodeMap<T>;
@@ -399,15 +394,17 @@ public:
     DecisionTree0 & operator=(DecisionTree0 &&) = default;
 
     /// \brief Train the decision tree.
+    template <typename FEATURES, typename LABELS>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y
     );
 
     /// \brief Predict new data using the forest.
+    template <typename FEATURES, typename LABELS>
     void predict(
             FEATURES const & test_x,
-            MultiArrayView<1, LabelType> & pred_y
+            LABELS & pred_y
     ) const;
 
 protected:
@@ -420,6 +417,7 @@ protected:
     /// \param[out] n1: The second child node.
     /// \param label_buffer0: Buffer storage for labels.
     /// \param label_buffer1: Buffer storage for labels.
+    template <typename FEATURES, typename LABELS>
     void split(
             Node const & node,
             FEATURES const & data_x,
@@ -455,14 +453,15 @@ private:
 
 };
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-DecisionTree0<FOREST, FEATURES, LABELS>::DecisionTree0(
+template <typename FEATURETYPE, typename LABELTYPE>
+DecisionTree0<FEATURETYPE, LABELTYPE>::DecisionTree0(
         const std::vector<size_t> & instance_indices
 )   : instance_indices_(instance_indices)
 {}
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-void DecisionTree0<FOREST, FEATURES, LABELS>::train(
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS>
+void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y
 ){
@@ -492,10 +491,11 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::train(
     }
 }
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS>
+void DecisionTree0<FEATURETYPE, LABELTYPE>::predict(
         FEATURES const & test_x,
-        MultiArrayView<1, LabelType> & pred_y
+        LABELS & pred_y
 ) const {
 
     Node rootnode = tree_.getRoot();
@@ -522,8 +522,9 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::predict(
     }
 }
 
-template <typename FOREST, typename FEATURES, typename LABELS>
-void DecisionTree0<FOREST, FEATURES, LABELS>::split(
+template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURES, typename LABELS>
+void DecisionTree0<FEATURETYPE, LABELTYPE>::split(
         Node const & node,
         FEATURES const & data_x,
         LABELS const & data_y,
@@ -653,25 +654,14 @@ void DecisionTree0<FOREST, FEATURES, LABELS>::split(
 
 
 /// \brief Random forest class.
-/// \note FEATURES/LABELS must implement the operator[] that gets an instance index and returns the features/labels of that instance.
-template <typename FEATURES, typename LABELS>
+template <typename FEATURETYPE, typename LABELTYPE>
 class RandomForest0
 {
 public:
 
-//    typedef vigra::Forest1<vigra::DAGraph0> Tree;
-    typedef BinaryTree Tree;
-    typedef Tree::Node Node;
-    typedef FEATURES Features;
-    typedef typename Features::value_type FeatureType;
-    typedef LABELS Labels;
-    typedef typename Labels::value_type LabelType;
-
-//    template <typename VALUE_TYPE>
-//    using PropertyMap = Forest::template PropertyMap<VALUE_TYPE>;
-
-//    template <typename VALUE_TYPE>
-//    using NodeMap = Tree::template NodeMap<VALUE_TYPE>;
+    typedef FEATURETYPE FeatureType;
+    typedef LABELTYPE LabelType;
+    typedef DecisionTree0<FeatureType, LabelType> Tree;
 
     RandomForest0() = default;
     RandomForest0(RandomForest0 const &) = default;
@@ -681,6 +671,7 @@ public:
     RandomForest0 & operator=(RandomForest0 &&) = default;
 
     /// \brief Train the random forest.
+    template <typename FEATURES, typename LABELS>
     void train(
             FEATURES const & train_x,
             LABELS const & train_y,
@@ -688,24 +679,32 @@ public:
     );
 
     /// \brief Predict new data using the forest.
+    template <typename FEATURES, typename LABELS>
     void predict(
             FEATURES const & test_x,
-            MultiArrayView<1, LabelType> & pred_y
+            LABELS & pred_y
     ) const;
 
 protected:
 
     /// \brief The trees of the forest.
-    std::vector<DecisionTree0<Tree, Features, Labels> > dtrees_;
+    std::vector<Tree> dtrees_;
 
 };
 
+template <typename FEATURETYPE, typename LABELTYPE>
 template <typename FEATURES, typename LABELS>
-void RandomForest0<FEATURES, LABELS>::train(
+void RandomForest0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
         size_t num_trees
 ){
+    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+                  "RandomForest0::train(): Wrong feature type.");
+    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+                  "RandomForest0::train(): Wrong label type.");
+
+    // TODO: Use resize and do the sampling inside the tree.
     dtrees_.reserve(num_trees);
 
     for (size_t i = 0; i < num_trees; ++i)
@@ -733,11 +732,16 @@ void RandomForest0<FEATURES, LABELS>::train(
     }
 }
 
+template <typename FEATURETYPE, typename LABELTYPE>
 template <typename FEATURES, typename LABELS>
-void RandomForest0<FEATURES, LABELS>::predict(
+void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
         FEATURES const & test_x,
-        MultiArrayView<1, LabelType> & pred_y
+        LABELS & pred_y
 ) const {
+    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+                  "RandomForest0::predict(): Wrong feature type.");
+    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+                  "RandomForest0::predict(): Wrong label type.");
 
     // Let each tree predict all instances.
     MultiArray<2, LabelType> labels(Shape2(test_x.num_instances(), dtrees_.size()));
@@ -746,8 +750,9 @@ void RandomForest0<FEATURES, LABELS>::predict(
         auto label_view = labels.template bind<1>(i);
         dtrees_[i].predict(test_x, label_view);
     }
-    std::vector<size_t> label_counts_vec;
+
     // Find the majority vote.
+    std::vector<size_t> label_counts_vec;
     for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
         // Count the labels.
