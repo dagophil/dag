@@ -366,6 +366,68 @@ protected:
 
 
 
+class BootstrapSampler
+{
+
+public:
+
+    typedef std::vector<size_t>::iterator iterator;
+    typedef std::vector<size_t>::const_iterator const_iterator;
+    typedef UniformIntRandomFunctor<MersenneTwister> Random;
+
+    /// \brief Create the bootstrap samples.
+    explicit BootstrapSampler()
+        : rand_()
+    {}
+
+    /// \brief Create a bootstrap sample.
+    std::vector<size_t> bootstrap_sample(size_t num_instances) const
+    {
+        std::vector<size_t> v(num_instances);
+        for (size_t i = 0; i < v.size(); ++i)
+            v[i] = rand_() % num_instances;
+        return v;
+    }
+
+    /// \brief Return all of the given instances (hence do nothing).
+    template <typename ITER>
+    void split_sample(ITER & begin, ITER & end) const
+    {
+    }
+
+protected:
+
+    Random rand_;
+
+    std::vector<size_t> instances_;
+
+};
+
+
+
+class PurityTermination
+{
+public:
+    template <typename ITER, typename LABELS>
+    bool stop(ITER begin, ITER end, LABELS const & labels, typename LABELS::value_type & first_label) const
+    {
+        if (std::distance(begin, end) < 2)
+            return true;
+
+        first_label = labels[*begin];
+        ++begin;
+        while (begin != end)
+        {
+            if (labels[*begin] != first_label)
+                return false;
+            ++begin;
+        }
+        return true;
+    }
+};
+
+
+
 /// \brief Simple decision tree class.
 template <typename FEATURETYPE, typename LABELTYPE>
 class DecisionTree0
@@ -382,11 +444,7 @@ public:
     using NodeMap = typename Tree::template NodeMap<T>;
 
     /// \brief Initialize the tree with the given instance indices.
-    /// \param instance_indices: The indices of the instances in the feature matrix.
-    DecisionTree0(
-            std::vector<size_t> const & instance_indices
-    );
-
+    DecisionTree0() = default;
     DecisionTree0(DecisionTree0 const &) = default;
     DecisionTree0(DecisionTree0 &&) = default;
     ~DecisionTree0() = default;
@@ -394,7 +452,7 @@ public:
     DecisionTree0 & operator=(DecisionTree0 &&) = default;
 
     /// \brief Train the decision tree.
-    template <typename FEATURES, typename LABELS>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION>
     void train(
             FEATURES const & data_x,
             LABELS const & data_y
@@ -445,8 +503,8 @@ private:
     typedef std::vector<size_t>::iterator InstanceIterator;
     typedef detail::IterRange<InstanceIterator> Range;
 
-    /// \brief Vector with the instance indices.
-    std::vector<size_t> instance_indices_;
+//    /// \brief Vector with the instance indices.
+//    std::vector<size_t> instance_indices_;
 
     /// \brief The instances of each node (begin and end iterator in the vector instance_indices_).
     NodeMap<Range> instance_ranges_;
@@ -454,21 +512,19 @@ private:
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
-DecisionTree0<FEATURETYPE, LABELTYPE>::DecisionTree0(
-        const std::vector<size_t> & instance_indices
-)   : instance_indices_(instance_indices)
-{}
-
-template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION>
 void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
-        FEATURES const & data_x,
-        LABELS const & data_y
+        FEATURES const & features,
+        LABELS const & labels
 ){
+    // Create the bootstrap indices.
+    SAMPLER sampler;
+    std::vector<size_t> instance_indices = sampler.bootstrap_sample(labels.size());
+
     // Create the queue with the nodes to be split and place the root node with all instances inside.
     std::queue<Node> node_queue;
     auto const rootnode = tree_.addNode();
-    instance_ranges_[rootnode] = {instance_indices_.begin(), instance_indices_.end()};
+    instance_ranges_[rootnode] = {instance_indices.begin(), instance_indices.end()};
     node_queue.push(rootnode);
 
     // The buffer vectors are used to count the labels and label priors in each split.
@@ -482,12 +538,28 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
         auto const node = node_queue.front();
         node_queue.pop();
 
-        Node n0, n1;
-        split(node, data_x, data_y, n0, n1, label_buffer0, label_buffer1);
-        if (tree_.valid(n0))
+        // Draw a random sample of the instances.
+        auto instances = instance_ranges_[node];
+        sampler.split_sample(instances.begin, instances.end);
+
+        // Check the termination criterion.
+        TERMINATION termination_crit;
+        LabelType first_label;
+        bool do_split = !termination_crit.stop(instances.begin, instances.end, labels, first_label);
+        if (do_split)
+        {
+            // Split the node.
+            Node n0, n1;
+            split(node, features, labels, n0, n1, label_buffer0, label_buffer1);
+            vigra_assert(n0 != lemon::INVALID && n1 != lemon::INVALID, "Error");
             node_queue.push(n0);
-        if (tree_.valid(n1))
             node_queue.push(n1);
+        }
+        else
+        {
+            // Make the node terminal.
+            node_labels_[node] = first_label;
+        }
     }
 }
 
@@ -536,32 +608,6 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::split(
     auto const inst_begin = instance_ranges_[node].begin;
     auto const inst_end = instance_ranges_[node].end;
     auto const num_instances = std::distance(inst_begin, inst_end);
-
-    // Check whether the given node is pure.
-    {
-        auto is_pure = true;
-        LabelType first_label = 0;
-        if (num_instances > 1)
-        {
-            auto it(inst_begin);
-            first_label = data_y[*it];
-            for (++it; it != inst_end; ++it)
-            {
-                if (data_y[*it] != first_label)
-                {
-                    is_pure = false;
-                    break;
-                }
-            }
-        }
-        if (is_pure)
-        {
-            node_labels_[node] = first_label;
-            n0 = lemon::INVALID;
-            n1 = lemon::INVALID;
-            return;
-        }
-    }
 
     // Get a random subset of the features.
     size_t const num_feats = std::ceil(std::sqrt(data_x.num_features()));
@@ -671,7 +717,7 @@ public:
     RandomForest0 & operator=(RandomForest0 &&) = default;
 
     /// \brief Train the random forest.
-    template <typename FEATURES, typename LABELS>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION>
     void train(
             FEATURES const & train_x,
             LABELS const & train_y,
@@ -693,7 +739,7 @@ protected:
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS>
+template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION>
 void RandomForest0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
@@ -705,30 +751,13 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
                   "RandomForest0::train(): Wrong label type.");
 
     // TODO: Use resize and do the sampling inside the tree.
-    dtrees_.reserve(num_trees);
+    dtrees_.resize(num_trees);
 
     for (size_t i = 0; i < num_trees; ++i)
     {
         // TODO: Remove output.
         std::cout << "training tree " << i << std::endl;
-
-        // Draw the bootstrap indices.
-        std::vector<size_t> index_vector;
-        index_vector.reserve(data_x.num_instances());
-        for (size_t k = 0; k < data_x.num_instances(); ++k)
-            index_vector.push_back(k);
-        std::vector<size_t> instance_indices;
-        instance_indices.reserve(data_x.num_instances());
-        detail::sample_with_replacement(
-                    data_x.num_instances(),
-                    index_vector.begin(),
-                    index_vector.end(),
-                    std::back_inserter(instance_indices)
-        );
-
-        // Create the tree and train it.
-        dtrees_.push_back({instance_indices});
-        dtrees_.back().train(data_x, data_y);
+        dtrees_[i].train<FEATURES, LABELS, SAMPLER, TERMINATION>(data_x, data_y);
     }
 }
 
@@ -784,45 +813,6 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
 
 
 
-
-
-
-class BootstrapSampler
-{
-
-public:
-
-    typedef std::vector<size_t>::iterator iterator;
-    typedef std::vector<size_t>::const_iterator const_iterator;
-    typedef UniformIntRandomFunctor<MersenneTwister> Random;
-
-    /// \brief Create the bootstrap samples.
-    explicit BootstrapSampler()
-        : rand_()
-    {}
-
-    /// \brief Create a bootstrap sample.
-    std::vector<size_t> bootstrap_sample(size_t num_instances) const
-    {
-        std::vector<size_t> v(num_instances);
-        for (size_t i = 0; i < v.size(); ++i)
-            v[i] = rand_() % num_instances;
-        return v;
-    }
-
-    /// \brief Return all of the given instances (hence do nothing).
-    template <typename ITER>
-    void split_sample(ITER & begin, ITER & end)
-    {
-    }
-
-protected:
-
-    Random rand_;
-
-    std::vector<size_t> instances_;
-
-};
 
 
 
