@@ -109,6 +109,7 @@ void test_randomforest0()
     typedef LabelGetter<LabelType> Labels;
     typedef BootstrapSampler Sampler;
     typedef PurityTermination Termination;
+    typedef RandomSplit<GiniScorer> SplitFunctor;
 
     // Test sample_with_replacement().
     {
@@ -201,9 +202,11 @@ void test_randomforest0()
 
         // Train a random forest.
         RandomForest0<FeatureType, LabelType> rf;
-        Features train_feats(train_x, true);
+        Features train_feats(train_x);
         Labels train_labels(train_y);
-        rf.train<Features, Labels, Sampler, Termination>(train_feats, train_labels, 100);
+        rf.train<Features, Labels, Sampler, Termination, SplitFunctor>(
+                    train_feats, train_labels, 100
+        );
 
         // Predict using the forest.
         MultiArray<1, LabelType> pred_y(test_y.shape());
