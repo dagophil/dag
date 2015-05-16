@@ -258,9 +258,29 @@ public:
     typedef value_type & reference;
     typedef value_type const & const_reference;
 
-    FeatureGetter(MultiArrayView<2, T> const & arr)
-        : arr_(arr)
-    {}
+    FeatureGetter(MultiArrayView<2, T> const & arr, bool presort = false)
+        : arr_(arr),
+          presort_(presort)
+    {
+        if (presort_)
+        {
+            arr_sorted_.reshape(arr_.shape());
+            std::vector<size_t> ind(arr_.shape()[0]);
+            std::iota(ind.begin(), ind.end(), 0);
+            for (size_t j = 0; j < arr_.shape()[1]; ++j)
+            {
+                std::sort(ind.begin(), ind.end(),
+                        [& arr, & j](size_t a, size_t b) {
+                            return arr(a, j) < arr(b, j);
+                        }
+                );
+                for (size_t i = 0; i < ind.size(); ++i)
+                {
+                    arr_sorted_(ind[i], j) = i;
+                }
+            }
+        }
+    }
 
     /// \brief Return the features of instance i.
     MultiArrayView<1, T> instance_features(size_t i)
@@ -308,20 +328,56 @@ public:
         return arr_(i, j);
     }
 
+
+    struct Counter
+    {
+        Counter(size_t p_index = 0, size_t p_count = 0)
+            : index(p_index),
+              count(p_count)
+        {}
+        size_t index;
+        size_t count;
+    };
+
+
     template <typename ITER>
     void sort(size_t feat, ITER begin, ITER end) const
     {
-        auto const & arr = arr_;
-        std::sort(begin, end,
-                [& arr, & feat](size_t i, size_t j)
+        if (presort_)
+        {
+            std::vector<Counter> v(num_instances());
+            for (auto it = begin; it != end; ++it)
+            {
+                auto & item = v[arr_sorted_(*it, feat)];
+                item.index = *it;
+                ++item.count;
+            }
+            auto it = begin;
+            for (auto const & count : v)
+            {
+                for (size_t i = 0; i < count.count; ++i)
                 {
-                    return arr(i, feat) < arr(j, feat);
+                    *it = count.index;
+                    ++it;
                 }
-        );
+            }
+        }
+        else
+        {
+            auto const & arr = arr_;
+            std::sort(begin, end,
+                    [& arr, & feat](size_t i, size_t j)
+                    {
+                        return arr(i, feat) < arr(j, feat);
+                    }
+            );
+        }
     }
 
 protected:
     MultiArrayView<2, T> const & arr_;
+    bool presort_;
+    MultiArray<2, size_t> arr_sorted_;
 };
 
 template <typename T>
@@ -636,17 +692,13 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::split(
     for (auto const & feat : feat_indices)
     {
         // Sort the instances according to the current feature.
-        auto const features = data_x.get_features(feat);
-        std::sort(inst_begin, inst_end,
-                [& features](size_t a, size_t b){
-                    return features[a] < features[b];
-                }
-        );
+        data_x.sort(feat, inst_begin, inst_end);
 
         // Clear the label counter.
         std::fill(label_buffer1.begin(), label_buffer1.end(), 0);
 
         // Compute the gini impurity of each split.
+        auto const features = data_x.get_features(feat);
         size_t first_right_index = 0; // index of the first instance that is assigned to the right child
         for (size_t i = 0; i+1 < num_instances; ++i)
         {

@@ -201,7 +201,7 @@ void test_randomforest0()
 
         // Train a random forest.
         RandomForest0<FeatureType, LabelType> rf;
-        Features train_feats(train_x);
+        Features train_feats(train_x, true);
         Labels train_labels(train_y);
         rf.train<Features, Labels, Sampler, Termination>(train_feats, train_labels, 100);
 
