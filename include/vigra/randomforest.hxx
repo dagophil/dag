@@ -8,6 +8,7 @@
 #include <map>
 #include <set>
 #include <type_traits>
+#include <thread>
 
 //#include "dagraph.hxx"
 #include "jungle.hxx"
@@ -707,7 +708,7 @@ template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINA
 void RandomForest0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
-        size_t num_trees
+        size_t const num_trees
 ){
     static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
                   "RandomForest0::train(): Wrong feature type.");
@@ -732,14 +733,46 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
     }
     LabelGetter<size_t> data_y_id(data_y_id_arr); // TODO: What if LABELS is specialized?
 
-    // Train each tree with the label ids.
-    dtrees_.resize(num_trees);
-    for (size_t i = 0; i < num_trees; ++i)
-    {
+    // Create a named lambda to train a single tree with index i.
+    auto train_tree = [this, & data_x, & data_y_id](size_t i) {
         // TODO: Remove output.
         std::cout << "training tree " << i << std::endl;
         dtrees_[i].set_num_labels(distinct_labels_.size());
         dtrees_[i].train<FEATURES, LabelGetter<size_t>, SAMPLER, TERMINATION, SPLITFUNCTOR>(data_x, data_y_id);
+    };
+
+    // Train each tree.
+    dtrees_.resize(num_trees);
+    size_t const num_threads = std::thread::hardware_concurrency();
+    if (num_threads <= 1)
+    {
+        // Single thread.
+        for (size_t i = 0; i < num_trees; ++i)
+        {
+            train_tree(i);
+        }
+    }
+    else
+    {
+        // Multiple threads.
+        std::vector<std::thread> workers;
+        for (size_t k = 0; k < num_threads; ++k)
+        {
+            workers.push_back(std::thread(
+                    [this, & train_tree, & num_trees, & num_threads](size_t k)
+                    {
+                        for (size_t i = k; i < num_trees; i+=num_threads)
+                        {
+                            train_tree(i);
+                        }
+                    },
+                    k
+            ));
+        }
+        for (auto & t : workers)
+        {
+            t.join();
+        }
     }
 }
 
