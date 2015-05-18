@@ -6,6 +6,7 @@
 #include <vigra/iteratorfacade.hxx>
 #include <queue>
 #include <map>
+#include <set>
 #include <type_traits>
 
 //#include "dagraph.hxx"
@@ -184,6 +185,7 @@ public:
     typedef T value_type;
     typedef typename MultiArrayView<1, T>::iterator iterator;
     typedef typename MultiArrayView<1, T>::const_iterator const_iterator;
+    typedef typename MultiArrayView<1, T>::difference_type difference_type;
 
     LabelGetter(MultiArrayView<1, T> const & arr)
         : arr_(arr)
@@ -211,6 +213,31 @@ public:
     size_t num_instances() const
     {
         return arr_.size();
+    }
+
+    iterator begin()
+    {
+        return arr_.begin();
+    }
+
+    const_iterator begin() const
+    {
+        return arr_.begin();
+    }
+
+    iterator end()
+    {
+        return arr_.end();
+    }
+
+    const_iterator end() const
+    {
+        return arr_.end();
+    }
+
+    const difference_type & shape() const
+    {
+        return arr_.shape();
     }
 
 protected:
@@ -286,9 +313,9 @@ class GiniScorer
 public:
 
     template <typename LABELS, typename ITER>
-    GiniScorer(LABELS const & labels, ITER begin, ITER end)
-        : labels_prior_(0),
-          labels_left_(0),
+    GiniScorer(LABELS const & labels, size_t const num_labels, ITER begin, ITER end)
+        : labels_prior_(num_labels),
+          labels_left_(num_labels),
           n_total_(std::distance(begin, end)),
           n_left_(0)
     {
@@ -296,16 +323,15 @@ public:
         {
             size_t label = labels[*it];
             if (label >= labels_prior_.size())
-                labels_prior_.resize(label+1);
+                vigra_fail("GiniScorer(): Max label is larger than expected.");
             ++labels_prior_[label];
         }
-        labels_left_.resize(labels_prior_.size());
     }
 
     void add_left(size_t label)
     {
-        if (labels_left_.size() <= label)
-            labels_left_.resize(label+1);
+        if (label >= labels_left_.size())
+            vigra_fail("GiniScorer::add_left(): Label is larger than expected.");
         ++labels_left_[label];
         ++n_left_;
     }
@@ -356,6 +382,7 @@ public:
             ITER const inst_end,
             FEATURES const & features,
             LABELS const & labels,
+            size_t const num_labels,
             size_t & best_feat,
             typename FEATURES::value_type & best_split,
             ITER & split_iter
@@ -373,7 +400,7 @@ public:
         }
 
         // Initialize the scorer with the labels.
-        SCORER scorer(labels, inst_begin, inst_end);
+        SCORER scorer(labels, num_labels, inst_begin, inst_end);
 
         // On small sets, it might happen that all features on the random
         // feature subset are equal. In that case, no split was considered
@@ -455,8 +482,14 @@ public:
     template <typename T>
     using NodeMap = typename Tree::template NodeMap<T>;
 
-    /// \brief Initialize the tree with the given instance indices.
-    DecisionTree0() = default;
+    DecisionTree0()
+        : tree_(),
+          node_labels_(),
+          node_splits_(),
+          num_labels_(0),
+          instance_ranges_()
+    {}
+
     DecisionTree0(DecisionTree0 const &) = default;
     DecisionTree0(DecisionTree0 &&) = default;
     ~DecisionTree0() = default;
@@ -464,6 +497,8 @@ public:
     DecisionTree0 & operator=(DecisionTree0 &&) = default;
 
     /// \brief Train the decision tree.
+    ///
+    /// \note Before calling train, you must call set_num_labels with a value larger than the maximum value in data_y.
     template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION, typename SPLITFUNCTOR>
     void train(
             FEATURES const & data_x,
@@ -476,6 +511,12 @@ public:
             FEATURES const & test_x,
             LABELS & pred_y
     ) const;
+
+    /// \brief Set the number of labels.
+    void set_num_labels(size_t num_labels)
+    {
+        num_labels_ = num_labels;
+    }
 
 protected:
 
@@ -507,6 +548,9 @@ protected:
     /// \brief The split of each node.
     NodeMap<Split> node_splits_;
 
+    /// \brief The number of distinct labels.
+    size_t num_labels_;
+
 private:
 
     typedef detail::IterRange<std::vector<size_t>::iterator > Range;
@@ -522,6 +566,8 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & features,
         LABELS const & labels
 ){
+    vigra_precondition(num_labels_ > 0, "DecisionTree::train(): The number of distinct labels must be set before training.");
+
     // Create the bootstrap indices.
     SAMPLER sampler;
     std::vector<size_t> instance_indices = sampler.bootstrap_sample(labels.size());
@@ -557,7 +603,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
             size_t best_feat;
             FeatureType best_split;
             std::vector<size_t>::iterator split_iter;
-            split_found = functor.split(instances.begin, instances.end, features, labels, best_feat, best_split, split_iter);
+            split_found = functor.split(instances.begin, instances.end, features, labels, num_labels_, best_feat, best_split, split_iter);
             if (split_found)
             {
                 // Add the child nodes to the graph.
@@ -622,7 +668,7 @@ public:
 
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
-    typedef DecisionTree0<FeatureType, LabelType> Tree;
+    typedef DecisionTree0<FeatureType, size_t> Tree;
 
     RandomForest0() = default;
     RandomForest0(RandomForest0 const &) = default;
@@ -651,6 +697,9 @@ protected:
     /// \brief The trees of the forest.
     std::vector<Tree> dtrees_;
 
+    /// \brief The distinct labels that were found in training.
+    std::vector<LabelType> distinct_labels_;
+
 };
 
 template <typename FEATURETYPE, typename LABELTYPE>
@@ -665,12 +714,32 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
     static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
                   "RandomForest0::train(): Wrong label type.");
 
+    // Find the distinct labels.
+    std::set<LabelType> dlabels(data_y.begin(), data_y.end());
+    distinct_labels_.resize(dlabels.size());
+    std::copy(dlabels.begin(), dlabels.end(), distinct_labels_.begin());
+
+    // Translate the labels to the label ids.
+    std::map<FeatureType, size_t> label_id;
+    for (size_t i = 0; i < distinct_labels_.size(); ++i)
+    {
+        label_id[distinct_labels_[i]] = i;
+    }
+    MultiArray<1, size_t> data_y_id_arr(data_y.shape());
+    for (size_t i = 0; i < data_y_id_arr.size(); ++i)
+    {
+        data_y_id_arr[i] = label_id[data_y[i]];
+    }
+    LabelGetter<size_t> data_y_id(data_y_id_arr); // TODO: What if LABELS is specialized?
+
+    // Train each tree with the label ids.
     dtrees_.resize(num_trees);
     for (size_t i = 0; i < num_trees; ++i)
     {
         // TODO: Remove output.
         std::cout << "training tree " << i << std::endl;
-        dtrees_[i].train<FEATURES, LABELS, SAMPLER, TERMINATION, SPLITFUNCTOR>(data_x, data_y);
+        dtrees_[i].set_num_labels(distinct_labels_.size());
+        dtrees_[i].train<FEATURES, LabelGetter<size_t>, SAMPLER, TERMINATION, SPLITFUNCTOR>(data_x, data_y_id);
     }
 }
 
@@ -686,7 +755,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
                   "RandomForest0::predict(): Wrong label type.");
 
     // Let each tree predict all instances.
-    MultiArray<2, LabelType> labels(Shape2(test_x.num_instances(), dtrees_.size()));
+    MultiArray<2, size_t> labels(Shape2(test_x.num_instances(), dtrees_.size()));
     for (size_t i = 0; i < dtrees_.size(); ++i)
     {
         auto label_view = labels.template bind<1>(i);
@@ -694,33 +763,33 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
     }
 
     // Find the majority vote.
-    std::vector<size_t> label_counts_vec;
+    std::vector<size_t> label_counts_vec(distinct_labels_.size());
     for (size_t i = 0; i < test_x.num_instances(); ++i)
     {
         // Count the labels.
-        label_counts_vec.resize(0);
+        std::fill(label_counts_vec.begin(), label_counts_vec.end(), 0);
         for (size_t k = 0; k < dtrees_.size(); ++k)
         {
-            LabelType const label = labels[Shape2(i, k)];
+            size_t const label = labels[Shape2(i, k)];
             if (label >= label_counts_vec.size())
-                label_counts_vec.resize(label+1);
+                vigra_fail("Prediction of a label that did not exist in training.");
             ++label_counts_vec[label];
         }
 
         // Find the label with the maximum count.
         size_t max_count = 0;
-        LabelType max_label;
+        size_t max_label;
         for (size_t k = 0; k < label_counts_vec.size(); ++k)
         {
             if (label_counts_vec[k] > max_count)
             {
                 max_count = label_counts_vec[k];
-                max_label = static_cast<LabelType>(k);
+                max_label = k;
             }
         }
 
         // Write the label in the output array.
-        pred_y[i] = max_label;
+        pred_y[i] = distinct_labels_[max_label];
     }
 }
 
