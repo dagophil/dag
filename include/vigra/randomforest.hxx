@@ -545,7 +545,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
             size_t best_feat;
             FeatureType best_split;
             SPLITFUNCTOR functor;
-            auto split_iter = functor.split(instances.begin, instances.end, features, labels, label_buffer0, label_buffer1, best_feat, best_split);
+            auto split_iter = functor.split(instances.begin, instances.end, features, labels, best_feat, best_split);
 
             // Add the child nodes to the graph.
             Node n0 = tree_.addNode();
@@ -609,8 +609,6 @@ public:
             ITER const inst_end,
             FEATURES const & features,
             LABELS const & labels,
-            std::vector<size_t> & label_buffer0,
-            std::vector<size_t> & label_buffer1,
             size_t & best_feat,
             typename FEATURES::value_type & best_split
     ) const {
@@ -626,18 +624,8 @@ public:
         feat_indices.reserve(num_feats);
         detail::sample_without_replacement(num_feats, all_feat_indices.begin(), all_feat_indices.end(), std::back_inserter(feat_indices));
 
-        // Compute the prior label count.
-        std::fill(label_buffer0.begin(), label_buffer0.end(), 0);
-        for (auto it = inst_begin; it != inst_end; ++it)
-        {
-            size_t const l = static_cast<size_t>(labels[*it]);
-            if (l >= label_buffer0.size())
-            {
-                label_buffer0.resize(l+1);
-                label_buffer1.resize(l+1);
-            }
-            ++label_buffer0[l];
-        }
+        // Initialize the scorer with the label priors.
+        SCORER scorer(labels, inst_begin, inst_end);
 
         // Find the best split.
         float best_score = std::numeric_limits<float>::max();
@@ -647,7 +635,7 @@ public:
             features.sort(feat, inst_begin, inst_end);
 
             // Clear the label counter.
-            std::fill(label_buffer1.begin(), label_buffer1.end(), 0);
+            scorer.clear_left();
 
             // Compute the score of each split.
             for (size_t i = 0; i+1 < num_instances; ++i)
@@ -658,7 +646,7 @@ public:
 
                 // Add the label to the left child.
                 size_t const label = static_cast<size_t>(labels[left_instance]);
-                ++label_buffer1[label];
+                scorer.add_left(label);
 
                 // Skip if there is no new split.
                 auto const left = features(left_instance, feat);
@@ -666,11 +654,8 @@ public:
                 if (left == right)
                     continue;
 
-                // Compute the score.
-                SCORER scorer;
-                float const score = scorer(label_buffer1, label_buffer0);
-
                 // Update the best score.
+                float const score = scorer();
                 if (score < best_score)
                 {
                     best_score = score;
@@ -855,16 +840,69 @@ protected:
     bool stop_;
 };
 
+
+
 class GiniScorer
 {
 public:
-    template <typename COUNTTYPE>
+
+    GiniScorer()
+        : labels_prior_(),
+          labels_left_()
+    {}
+
+    template <typename LABELS, typename ITER>
+    GiniScorer(LABELS const & labels, ITER begin, ITER end)
+        : labels_prior_(0),
+          labels_left_(0)
+    {
+        for (auto it = begin; it != end; ++it)
+        {
+            size_t label = labels[*it];
+            if (label >= labels_prior_.size())
+                labels_prior_.resize(label+1);
+            ++labels_prior_[label];
+        }
+        labels_left_.resize(labels_prior_.size());
+    }
+
+    GiniScorer(std::vector<size_t> const & labels_prior)
+        : labels_prior_(labels_prior),
+          labels_left_(labels_prior.size(), 0)
+    {}
+
+    void add_left(size_t label)
+    {
+        if (labels_left_.size() <= label)
+            labels_left_.resize(label+1);
+        ++labels_left_[label];
+    }
+
+    void clear_left()
+    {
+        std::fill(labels_left_.begin(), labels_left_.end(), 0);
+    }
+
+    float operator()() const {
+        return detail::gini_impurity(labels_left_, labels_prior_);
+    }
+
     float operator()(
-            std::vector<COUNTTYPE> const & labels_left,
-            std::vector<COUNTTYPE> const & labels_prior
+            std::vector<size_t> const & labels_left
+    ) const {
+        return detail::gini_impurity(labels_left, labels_prior_);
+    }
+
+    float operator()(
+            std::vector<size_t> const & labels_left,
+            std::vector<size_t> const & labels_prior
     ) const {
         return detail::gini_impurity(labels_left, labels_prior);
     }
+
+protected:
+    std::vector<size_t> labels_prior_;
+    std::vector<size_t> labels_left_;
 };
 
 
