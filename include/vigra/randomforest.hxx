@@ -848,13 +848,17 @@ public:
 
     GiniScorer()
         : labels_prior_(),
-          labels_left_()
+          labels_left_(),
+          n_total_(0),
+          n_left_(0)
     {}
 
     template <typename LABELS, typename ITER>
     GiniScorer(LABELS const & labels, ITER begin, ITER end)
         : labels_prior_(0),
-          labels_left_(0)
+          labels_left_(0),
+          n_total_(std::distance(begin, end)),
+          n_left_(0)
     {
         for (auto it = begin; it != end; ++it)
         {
@@ -868,7 +872,9 @@ public:
 
     GiniScorer(std::vector<size_t> const & labels_prior)
         : labels_prior_(labels_prior),
-          labels_left_(labels_prior.size(), 0)
+          labels_left_(labels_prior.size(), 0),
+          n_total_(0),
+          n_left_(0)
     {}
 
     void add_left(size_t label)
@@ -876,15 +882,28 @@ public:
         if (labels_left_.size() <= label)
             labels_left_.resize(label+1);
         ++labels_left_[label];
+        ++n_left_;
     }
 
     void clear_left()
     {
         std::fill(labels_left_.begin(), labels_left_.end(), 0);
+        n_left_ = 0;
     }
 
     float operator()() const {
-        return detail::gini_impurity(labels_left_, labels_prior_);
+        float n_left = static_cast<float>(n_left_);
+        float n_right = static_cast<float>(n_total_ - n_left_);
+        float gini_left = 1;
+        float gini_right = 1;
+        for (size_t i = 0; i < labels_left_.size(); ++i)
+        {
+            float const p_left = labels_left_[i] / n_left;
+            float const p_right = (labels_prior_[i] - labels_left_[i]) / n_right;
+            gini_left -= (p_left*p_left);
+            gini_right -= (p_right*p_right);
+        }
+        return n_left*gini_left + n_right*gini_right;
     }
 
     float operator()(
@@ -903,6 +922,8 @@ public:
 protected:
     std::vector<size_t> labels_prior_;
     std::vector<size_t> labels_left_;
+    size_t const n_total_;
+    size_t n_left_;
 };
 
 
