@@ -394,8 +394,8 @@ public:
             for (size_t i = 0; i+1 < num_instances; ++i)
             {
                 // Compute the split.
-                size_t const left_instance = *(inst_begin+i);
-                size_t const right_instance = *(inst_begin+i+1);
+                size_t const left_instance = inst_begin[i];
+                size_t const right_instance = inst_begin[i+1];
 
                 // Add the label to the left child.
                 size_t const label = static_cast<size_t>(labels[left_instance]);
