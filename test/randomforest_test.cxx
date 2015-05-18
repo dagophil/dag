@@ -109,7 +109,7 @@ void test_randomforest0()
     typedef LabelGetter<LabelType> Labels;
     typedef BootstrapSampler Sampler;
     typedef PurityTermination Termination;
-    typedef RandomSplit<GiniScorer> SplitFunctor;
+    typedef RandomSplit<UniformIntRandomFunctor<MersenneTwister>, GiniScorer> SplitFunctor;
 
     // Test sample_with_replacement().
     {
@@ -143,31 +143,6 @@ void test_randomforest0()
         vigra_assert(s.size() == k, "sample_without_replacement(): Elements may only occur once.");
 
         // TODO: Check that the output is random.
-    }
-
-    // Test the split iterator.
-    {
-        typedef detail::SplitIterator<std::vector<float>::iterator> FloatSplitIter;
-        std::vector<float> v {1.f, 3.f, 3.f, 4.f, 4.f, 4.f, 8.f};
-        std::vector<float> splits_expected {2.f, 3.5f, 6.f};
-        std::vector<float> splits;
-        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
-            splits.push_back(*it);
-        vigra_assert(splits.size() == splits_expected.size(), "SplitIterator: Wrong number of splits.");
-        for (size_t i = 0; i < splits.size(); ++i)
-            vigra_assert(splits[i] == splits_expected[i], "SplitIterator: The splits are wrong.");
-
-        // Test border cases: Vector of size 0 and vecto of size 1.
-        v.clear();
-        splits_expected.clear();
-        splits.clear();
-        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
-            splits.push_back(*it);
-        vigra_assert(splits.size() == 0, "SplitIterator: Error on empty vector.");
-        v.push_back(1.f);
-        for (FloatSplitIter it(v.begin(), v.end()); it != v.end(); ++it)
-            splits.push_back(*it);
-        vigra_assert(splits.size() == 0, "SplitIterator: Error on vector with size one.");
     }
 
     // Build a random forest.
@@ -227,51 +202,9 @@ void test_randomforest0()
     std::cout << "test_randomforest0(): Success!" << std::endl;
 }
 
-void test_modularrandomforest()
-{
-    using namespace vigra;
-
-    typedef float S;
-    typedef UInt8 T;
-    typedef FeatureGetter<S> Features;
-    typedef LabelGetter<T> Labels;
-    typedef BootstrapSampler Sampler;
-    typedef PurityTerminationVisitor<Labels> TermVisitor;
-    typedef RandomSplitVisitor<Features, Labels, GiniScorer> SplitVisitor;
-
-    {
-        // Load some data.
-        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
-        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
-        std::vector<T> labels = {3, 8};
-        MultiArray<2, S> train_x;
-        MultiArray<1, T> train_y;
-        MultiArray<2, S> test_x;
-        MultiArray<1, T> test_y;
-        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
-
-        ModularRandomForest<S, T> rf;
-        Features train_feats(train_x);
-        Labels train_labels(train_y);
-        rf.train<Features, Labels, Sampler, TermVisitor, SplitVisitor>(train_feats, train_labels, 10);
-
-        Features test_feats(test_x);
-        MultiArray<1, T> pred_y;
-        rf.predict(test_feats, pred_y);
-    }
-
-
-
-
-
-    std::cout << "test_modularrandomforest(): Success!" << std::endl;
-}
-
-
 
 
 int main()
 {
     test_randomforest0();
-//    test_modularrandomforest();
 }

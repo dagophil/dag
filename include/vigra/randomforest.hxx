@@ -66,188 +66,41 @@ namespace detail
         }
     }
 
-    /// \brief Functor for std::accumulate that can be used to add the values of a map.
-    template <typename KEY, typename VALUE>
-    struct MapValueAdder
-    {
-    public:
-        VALUE operator()(VALUE const & a, std::pair<KEY, VALUE> const & p) const
-        {
-            return a + p.second;
-        }
-    };
+//    /// \brief Compute the gini impurity.
+//    /// \param labels_left: Label counts of the left child.
+//    /// \param label_priors: Total label count.
+//    template <typename COUNTTYPE>
+//    float gini_impurity(
+//            std::vector<COUNTTYPE> const & labels_left,
+//            std::vector<COUNTTYPE> const & label_priors
+//    ){
+//        typedef COUNTTYPE CountType;
 
-    /// \brief Compute the gini impurity.
-    /// \param labels_left: Label counts of the left child.
-    /// \param label_priors: Total label count.
-    template <typename COUNTTYPE>
-    float gini_impurity(
-            std::vector<COUNTTYPE> const & labels_left,
-            std::vector<COUNTTYPE> const & label_priors
-    ){
-        typedef COUNTTYPE CountType;
+//        CountType const n_total = std::accumulate(
+//                    label_priors.begin(),
+//                    label_priors.end(),
+//                    0
+//        );
+//        CountType const n_left = std::accumulate(
+//                    labels_left.begin(),
+//                    labels_left.end(),
+//                    0
+//        );
+//        CountType const n_right = n_total - n_left;
 
-        CountType const n_total = std::accumulate(
-                    label_priors.begin(),
-                    label_priors.end(),
-                    0
-        );
-        CountType const n_left = std::accumulate(
-                    labels_left.begin(),
-                    labels_left.end(),
-                    0
-        );
-        CountType const n_right = n_total - n_left;
-
-        float gini_left = 1;
-        float gini_right = 1;
-        for (size_t i = 0; i < labels_left.size(); ++i)
-        {
-            float const p_left = labels_left[i] / static_cast<float>(n_left);
-            float const p_right = (label_priors[i] - labels_left[i]) / static_cast<float>(n_right);
-            gini_left -= (p_left*p_left);
-            gini_right -= (p_right*p_right);
-        }
-        return n_left*gini_left + n_right*gini_right;
-    }
-
-    template <typename ITER>
-    class SplitIterator
-    {
-    public:
-
-        typedef typename std::iterator_traits<ITER>::value_type value_type;
-
-        SplitIterator(ITER const & begin, ITER const & end)
-            : current_(begin),
-              next_(std::next(begin)),
-              end_(end)
-        {
-            if (current_ == end_)
-                next_ = end_;
-            while (next_ != end_)
-            {
-                if (*next_ != *current_)
-                    break;
-                ++current_;
-                ++next_;
-            }
-        }
-
-        SplitIterator & operator++()
-        {
-            while (next_ != end_)
-            {
-                ++current_;
-                ++next_;
-                if (*next_ != *current_)
-                    break;
-            }
-        }
-
-        value_type operator*() const
-        {
-            return (*current_ + *next_) / 2;
-        }
-
-        bool operator==(SplitIterator const & other)
-        {
-            return next_ == other.next_;
-        }
-
-        bool operator==(ITER const & other)
-        {
-            return next_ == other;
-        }
-
-        bool operator!=(SplitIterator const & other)
-        {
-            return next_ != other.next_;
-        }
-
-        bool operator!=(ITER const & other)
-        {
-            return next_ != other;
-        }
-
-    protected:
-
-        ITER current_;
-        ITER next_;
-        ITER end_;
-
-    };
-
-//    /// \brief Iterate over in-between values of a container.
-//    /// \example Given a vector with the elements {1., 3., 3., 4., 4., 4., 8.}, the iterator would yield {2., 3.5, 6.}.
-//    /// \todo Write tests for the iterator.
-//    template <typename ITER>
-//    class SplitIterator : public ForwardIteratorFacade<SplitIterator<ITER>, typename std::iterator_traits<ITER>::value_type, true>
-//    {
-//    public:
-
-//        typedef typename std::iterator_traits<ITER>::value_type value_type;
-
-//        SplitIterator(lemon::Invalid const & inv = lemon::INVALID)
-//        {}
-
-//        SplitIterator(ITER const & begin, ITER const & end)
-//            : current_(begin),
-//              next_(std::next(begin)),
-//              end_(end)
+//        float gini_left = 1;
+//        float gini_right = 1;
+//        for (size_t i = 0; i < labels_left.size(); ++i)
 //        {
-//            while (current_ != end_ && next_ != end_)
-//            {
-//                if (*next_ != *current_)
-//                    break;
-//                ++current_;
-//                ++next_;
-//            }
+//            float const p_left = labels_left[i] / static_cast<float>(n_left);
+//            float const p_right = (label_priors[i] - labels_left[i]) / static_cast<float>(n_right);
+//            gini_left -= (p_left*p_left);
+//            gini_right -= (p_right*p_right);
 //        }
+//        return n_left*gini_left + n_right*gini_right;
+//    }
 
-//        bool operator==(ITER const & other) const
-//        {
-//            return next_ == other;
-//        }
-
-//        bool operator!=(ITER const & other) const
-//        {
-//            return next_ != other;
-//        }
-
-//    private:
-
-//        friend class vigra::IteratorFacadeCoreAccess;
-
-//        bool equal(
-//                SplitIterator const & other
-//        ) const {
-//            return next_ == other.current_;
-//        }
-
-//        void increment()
-//        {
-//            while (next_ != end_)
-//            {
-//                ++current_;
-//                ++next_;
-//                if (*next_ != *current_)
-//                    break;
-//            }
-//        }
-
-//        value_type dereference() const
-//        {
-//            return (*current_ + *next_) / 2;
-//        }
-
-//        ITER current_;
-//        ITER next_;
-//        ITER end_;
-
-//    };
-
-}
+} // namespace detail
 
 /// \brief This class implements operator[] to return the feature vector of the requested instance.
 template <typename T>
@@ -428,6 +281,165 @@ public:
 
 
 
+class GiniScorer
+{
+public:
+
+    template <typename LABELS, typename ITER>
+    GiniScorer(LABELS const & labels, ITER begin, ITER end)
+        : labels_prior_(0),
+          labels_left_(0),
+          n_total_(std::distance(begin, end)),
+          n_left_(0)
+    {
+        for (auto it = begin; it != end; ++it)
+        {
+            size_t label = labels[*it];
+            if (label >= labels_prior_.size())
+                labels_prior_.resize(label+1);
+            ++labels_prior_[label];
+        }
+        labels_left_.resize(labels_prior_.size());
+    }
+
+    void add_left(size_t label)
+    {
+        if (labels_left_.size() <= label)
+            labels_left_.resize(label+1);
+        ++labels_left_[label];
+        ++n_left_;
+    }
+
+    void clear_left()
+    {
+        std::fill(labels_left_.begin(), labels_left_.end(), 0);
+        n_left_ = 0;
+    }
+
+    float operator()() const {
+        float n_left = static_cast<float>(n_left_);
+        float n_right = static_cast<float>(n_total_ - n_left_);
+        float gini_left = 1;
+        float gini_right = 1;
+        for (size_t i = 0; i < labels_left_.size(); ++i)
+        {
+            float const p_left = labels_left_[i] / n_left;
+            float const p_right = (labels_prior_[i] - labels_left_[i]) / n_right;
+            gini_left -= (p_left*p_left);
+            gini_right -= (p_right*p_right);
+        }
+        return n_left*gini_left + n_right*gini_right;
+    }
+
+protected:
+
+    std::vector<size_t> labels_prior_;
+    std::vector<size_t> labels_left_;
+    size_t const n_total_;
+    size_t n_left_;
+};
+
+
+
+template <typename RAND, typename SCORER>
+class RandomSplit
+{
+public:
+
+    RandomSplit(RAND const & rand)
+        : rand_(rand)
+    {}
+
+    template <typename ITER, typename FEATURES, typename LABELS>
+    bool split(
+            ITER const inst_begin,
+            ITER const inst_end,
+            FEATURES const & features,
+            LABELS const & labels,
+            size_t & best_feat,
+            typename FEATURES::value_type & best_split,
+            ITER & split_iter
+    ) const {
+        auto const num_instances = std::distance(inst_begin, inst_end);
+
+        // Get a random subset of the features.
+        size_t const num_feats = std::ceil(std::sqrt(features.num_features()));
+        std::vector<size_t> all_feat_indices(features.num_features());
+        std::iota(all_feat_indices.begin(), all_feat_indices.end(), 0);
+        for (size_t i = 0; i < num_feats; ++i)
+        {
+            size_t j = rand_() % (features.num_features()-i);
+            std::swap(all_feat_indices[i], all_feat_indices[j]);
+        }
+
+        // Initialize the scorer with the labels.
+        SCORER scorer(labels, inst_begin, inst_end);
+
+        // On small sets, it might happen that all features on the random
+        // feature subset are equal. In that case, no split was considered
+        // at all and the function returns false.
+        bool split_found = false;
+
+        // Find the best split.
+        float best_score = std::numeric_limits<float>::max();
+        for (size_t k = 0; k < num_feats; ++k)
+        {
+            auto const feat = all_feat_indices[k];
+
+            // Sort the instances according to the current feature.
+            features.sort(feat, inst_begin, inst_end);
+
+            // Compute the score of each split.
+            scorer.clear_left();
+            for (size_t i = 0; i+1 < num_instances; ++i)
+            {
+                // Compute the split.
+                size_t const left_instance = *(inst_begin+i);
+                size_t const right_instance = *(inst_begin+i+1);
+
+                // Add the label to the left child.
+                size_t const label = static_cast<size_t>(labels[left_instance]);
+                scorer.add_left(label);
+
+                // Skip if there is no new split.
+                auto const left = features(left_instance, feat);
+                auto const right = features(right_instance, feat);
+                if (left == right)
+                    continue;
+
+                // Update the best score.
+                split_found = true;
+                float const score = scorer();
+                if (score < best_score)
+                {
+                    best_score = score;
+                    best_split = (left+right)/2;
+                    best_feat = feat;
+                }
+            }
+        }
+
+        if (!split_found)
+            return false;
+
+        // Separate the data according to the best split.
+        auto const best_features = features.get_features(best_feat);
+        split_iter = std::partition(inst_begin, inst_end,
+                [& best_features, & best_split](size_t instance_index){
+                    return best_features[instance_index] < best_split;
+                }
+        );
+        return true;
+    }
+
+protected:
+
+    RAND const & rand_;
+
+};
+
+
+
 /// \brief Simple decision tree class.
 template <typename FEATURETYPE, typename LABELTYPE>
 class DecisionTree0
@@ -520,10 +532,9 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
     instance_ranges_[rootnode] = {instance_indices.begin(), instance_indices.end()};
     node_queue.push(rootnode);
 
-    // The buffer vectors are used to count the labels and label priors in each split.
-    // They are created here so the vectors dont need to be allocated in each split.
-    std::vector<size_t> label_buffer0;
-    std::vector<size_t> label_buffer1;
+    // Initialize the split functor with a random engine.
+    UniformIntRandomFunctor<MersenneTwister> rand;
+    SPLITFUNCTOR functor(rand);
 
     // Split the nodes.
     while (!node_queue.empty())
@@ -539,26 +550,30 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
         TERMINATION termination_crit;
         LabelType first_label;
         bool do_split = !termination_crit.stop(instances.begin, instances.end, labels, first_label);
+        bool split_found = false;
         if (do_split)
         {
             // Split the node.
             size_t best_feat;
             FeatureType best_split;
-            SPLITFUNCTOR functor;
-            auto split_iter = functor.split(instances.begin, instances.end, features, labels, best_feat, best_split);
-
-            // Add the child nodes to the graph.
-            Node n0 = tree_.addNode();
-            Node n1 = tree_.addNode();
-            tree_.addArc(node, n0);
-            tree_.addArc(node, n1);
-            instance_ranges_[n0] = {instances.begin, split_iter};
-            instance_ranges_[n1] = {split_iter, instances.end};
-            node_splits_[node] = {best_feat, best_split};
-            node_queue.push(n0);
-            node_queue.push(n1);
+            std::vector<size_t>::iterator split_iter;
+            split_found = functor.split(instances.begin, instances.end, features, labels, best_feat, best_split, split_iter);
+            if (split_found)
+            {
+                // Add the child nodes to the graph.
+                Node n0 = tree_.addNode();
+                Node n1 = tree_.addNode();
+                tree_.addArc(node, n0);
+                tree_.addArc(node, n1);
+                instance_ranges_[n0] = {instances.begin, split_iter};
+                instance_ranges_[n1] = {split_iter, instances.end};
+                node_splits_[node] = {best_feat, best_split};
+                node_queue.push(n0);
+                node_queue.push(n1);
+            }
         }
-        else
+
+        if (!do_split || !split_found)
         {
             // Make the node terminal.
             node_labels_[node] = first_label;
@@ -596,85 +611,6 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::predict(
         pred_y[i] = node_labels_.at(node);
     }
 }
-
-
-
-template <typename SCORER>
-class RandomSplit
-{
-public:
-    template <typename ITER, typename FEATURES, typename LABELS>
-    ITER split(
-            ITER const inst_begin,
-            ITER const inst_end,
-            FEATURES const & features,
-            LABELS const & labels,
-            size_t & best_feat,
-            typename FEATURES::value_type & best_split
-    ) const {
-        auto const num_instances = std::distance(inst_begin, inst_end);
-
-        // Get a random subset of the features.
-        size_t const num_feats = std::ceil(std::sqrt(features.num_features()));
-        std::vector<size_t> all_feat_indices;
-        all_feat_indices.reserve(features.num_features());
-        for (size_t i = 0; i < features.num_features(); ++i)
-            all_feat_indices.push_back(i);
-        std::vector<size_t> feat_indices;
-        feat_indices.reserve(num_feats);
-        detail::sample_without_replacement(num_feats, all_feat_indices.begin(), all_feat_indices.end(), std::back_inserter(feat_indices));
-
-        // Initialize the scorer with the label priors.
-        SCORER scorer(labels, inst_begin, inst_end);
-
-        // Find the best split.
-        float best_score = std::numeric_limits<float>::max();
-        for (auto const & feat : feat_indices)
-        {
-            // Sort the instances according to the current feature.
-            features.sort(feat, inst_begin, inst_end);
-
-            // Clear the label counter.
-            scorer.clear_left();
-
-            // Compute the score of each split.
-            for (size_t i = 0; i+1 < num_instances; ++i)
-            {
-                // Compute the split.
-                size_t const left_instance = *(inst_begin+i);
-                size_t const right_instance = *(inst_begin+i+1);
-
-                // Add the label to the left child.
-                size_t const label = static_cast<size_t>(labels[left_instance]);
-                scorer.add_left(label);
-
-                // Skip if there is no new split.
-                auto const left = features(left_instance, feat);
-                auto const right = features(right_instance, feat);
-                if (left == right)
-                    continue;
-
-                // Update the best score.
-                float const score = scorer();
-                if (score < best_score)
-                {
-                    best_score = score;
-                    best_split = (left+right)/2;
-                    best_feat = feat;
-                }
-            }
-        }
-
-        // Separate the data according to the best split.
-        auto const best_features = features.get_features(best_feat);
-        auto const split_iter = std::partition(inst_begin, inst_end,
-                [& best_features, & best_split](size_t instance_index){
-                    return best_features[instance_index] < best_split;
-                }
-        );
-        return split_iter;
-    }
-};
 
 
 
@@ -786,530 +722,6 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
         // Write the label in the output array.
         pred_y[i] = max_label;
     }
-}
-
-
-
-
-
-
-template <typename LABELS>
-class PurityTerminationVisitor
-{
-public:
-
-    PurityTerminationVisitor(LABELS const & data_y)
-        : labels_(data_y),
-          stop_(true)
-    {}
-
-    template <typename TREE>
-    void visit(TREE const & tree)
-    {
-        stop_ = true;
-        auto begin = tree.node_sample_begin();
-        auto end = tree.node_sample_end();
-        if (std::distance(begin, end) < 2)
-        {
-            return;
-        }
-
-        auto const first_label = labels_[*begin];
-        ++begin;
-        while (begin != end)
-        {
-            if (labels_[*begin] != first_label)
-            {
-                stop_ = false;
-                return;
-            }
-            ++begin;
-        }
-    }
-
-    bool stop() const
-    {
-        return stop_;
-    }
-
-protected:
-
-    LABELS const & labels_;
-
-    /// \brief Whether to stop or continue after the visit.
-    bool stop_;
-};
-
-
-
-class GiniScorer
-{
-public:
-
-    GiniScorer()
-        : labels_prior_(),
-          labels_left_(),
-          n_total_(0),
-          n_left_(0)
-    {}
-
-    template <typename LABELS, typename ITER>
-    GiniScorer(LABELS const & labels, ITER begin, ITER end)
-        : labels_prior_(0),
-          labels_left_(0),
-          n_total_(std::distance(begin, end)),
-          n_left_(0)
-    {
-        for (auto it = begin; it != end; ++it)
-        {
-            size_t label = labels[*it];
-            if (label >= labels_prior_.size())
-                labels_prior_.resize(label+1);
-            ++labels_prior_[label];
-        }
-        labels_left_.resize(labels_prior_.size());
-    }
-
-    GiniScorer(std::vector<size_t> const & labels_prior)
-        : labels_prior_(labels_prior),
-          labels_left_(labels_prior.size(), 0),
-          n_total_(0),
-          n_left_(0)
-    {}
-
-    void add_left(size_t label)
-    {
-        if (labels_left_.size() <= label)
-            labels_left_.resize(label+1);
-        ++labels_left_[label];
-        ++n_left_;
-    }
-
-    void clear_left()
-    {
-        std::fill(labels_left_.begin(), labels_left_.end(), 0);
-        n_left_ = 0;
-    }
-
-    float operator()() const {
-        float n_left = static_cast<float>(n_left_);
-        float n_right = static_cast<float>(n_total_ - n_left_);
-        float gini_left = 1;
-        float gini_right = 1;
-        for (size_t i = 0; i < labels_left_.size(); ++i)
-        {
-            float const p_left = labels_left_[i] / n_left;
-            float const p_right = (labels_prior_[i] - labels_left_[i]) / n_right;
-            gini_left -= (p_left*p_left);
-            gini_right -= (p_right*p_right);
-        }
-        return n_left*gini_left + n_right*gini_right;
-    }
-
-    float operator()(
-            std::vector<size_t> const & labels_left
-    ) const {
-        return detail::gini_impurity(labels_left, labels_prior_);
-    }
-
-    float operator()(
-            std::vector<size_t> const & labels_left,
-            std::vector<size_t> const & labels_prior
-    ) const {
-        return detail::gini_impurity(labels_left, labels_prior);
-    }
-
-protected:
-    std::vector<size_t> labels_prior_;
-    std::vector<size_t> labels_left_;
-    size_t const n_total_;
-    size_t n_left_;
-};
-
-
-
-template <typename FEATURES, typename LABELS, typename SCORER>
-class RandomSplitVisitor
-{
-public:
-
-    typedef FEATURES Features;
-    typedef LABELS Labels;
-    typedef SCORER Scorer;
-    typedef typename Features::value_type FeatureType;
-    typedef typename Labels::value_type LabelType;
-    typedef UniformIntRandomFunctor<MersenneTwister> Random;
-
-    struct Split
-    {
-        size_t dim;
-        LabelType thresh;
-    };
-
-    RandomSplitVisitor(Features const & features, Labels const & labels)
-        : features_(features),
-          labels_(labels),
-          split_({0, 0}),
-          feature_indices_(features.num_features()),
-          num_feats_(std::ceil(std::sqrt(features.num_features()))),
-          rand_(),
-          scorer_()
-    {
-        std::iota(feature_indices_.begin(), feature_indices_.end(), 0);
-    }
-
-    template <typename TREE>
-    void visit(TREE & tree)
-    {
-        // Count the labels.
-        auto const sample_begin = tree.node_sample_begin();
-        auto const sample_end = tree.node_sample_end();
-        auto const num_instances = std::distance(sample_begin, sample_end);
-        std::fill(tree.labels_prior.begin(), tree.labels_prior.end(), 0);
-        for (auto it = sample_begin; it != sample_end; ++it)
-        {
-            size_t const l = static_cast<size_t>(labels_[*it]);
-            if (l > tree.max_label())
-            {
-                tree.set_max_label(l);
-                tree.labels_left.resize(l+1);
-                tree.labels_prior.resize(l+1, 0);
-            }
-            ++tree.labels_prior[l];
-        }
-
-        // Get a random subset of the features.
-        for (size_t i = 0; i < num_feats_; ++i)
-        {
-            size_t j = i + (rand_() % (features_.num_features() - i));
-            std::swap(feature_indices_[i], feature_indices_[j]);
-        }
-
-        // Find the best split.
-        split_.dim = 0;
-        split_.thresh = 0;
-        float best_score = std::numeric_limits<float>::max();
-        for (size_t j = 0; j < num_feats_; ++j)
-        {
-            size_t const feat = feature_indices_[j];
-
-            // Clear the counter of the left child.
-            std::fill(tree.labels_left.begin(), tree.labels_left.end(), 0);
-
-            // Iterate over the sorted feature.
-            features_.sort(feat, sample_begin, sample_end);
-            for (size_t i = 0; i+1 < num_instances; ++i)
-            {
-                size_t const left_instance = *(sample_begin+i);
-                size_t const right_instance = *(sample_begin+i+1);
-
-                // Add the label to the left child.
-                size_t const label = static_cast<size_t>(labels_[left_instance]);
-                ++tree.labels_left[label];
-
-                // Skip if there is no new split.
-                auto const left = features_(left_instance, feat);
-                auto const right = features_(right_instance, feat);
-                if (left == right)
-                    continue;
-
-                // Compute the score.
-                float const score = scorer_(tree.labels_left, tree.labels_prior);
-
-                // Update the best score.
-                if (score < best_score)
-                {
-                    best_score = score;
-                    split_.dim = feat;
-                    split_.thresh = (left+right)/2;
-                }
-            }
-        }
-    }
-
-    template <typename ITER>
-    ITER apply_split(ITER const & begin, ITER const & end) const
-    {
-        Features const & features(features_);
-        Split const & split(split_);
-        return std::partition(begin, end,
-                [& features, & split](size_t i) {
-                    return features(i, split.dim) < split.thresh;
-                }
-        );
-    }
-
-    Split best_split() const
-    {
-        return split_;
-    }
-
-protected:
-
-    Features const & features_;
-
-    Labels const & labels_;
-
-    Split split_;
-
-    std::vector<size_t> feature_indices_;
-
-    size_t num_feats_;
-
-    Random rand_;
-
-    Scorer scorer_;
-
-
-};
-
-
-
-template <typename FEATURETYPE, typename LABELTYPE>
-class ModularDecisionTree
-{
-
-public:
-
-    typedef FEATURETYPE FeatureType;
-    typedef LABELTYPE LabelType;
-    typedef BinaryTree Graph;
-    typedef Graph::Node Node;
-    typedef std::vector<size_t>::iterator iterator;
-    typedef detail::IterRange<iterator> IterRange;
-
-    template <typename T>
-    using NodeMap = Graph::NodeMap<T>;
-
-    ModularDecisionTree();
-
-    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
-    void train(
-            FEATURES const & data_x,
-            LABELS const & data_y
-    );
-
-    iterator node_sample_begin() const
-    {
-        return node_sample_.begin;
-    }
-
-    iterator node_sample_end() const
-    {
-        return node_sample_.end;
-    }
-
-    /// \brief Label counts of the instances in the left child node during training.
-    std::vector<size_t> labels_left;
-
-    /// \brief Label counts of all instances during training.
-    std::vector<size_t> labels_prior;
-
-    /// \brief Return the max label.
-    LabelType max_label() const
-    {
-        return max_label_;
-    }
-
-    /// \brief Set the max label.
-    void set_max_label(LabelType const & label)
-    {
-        max_label_ = label;
-    }
-
-protected:
-
-    Graph graph_;
-
-    /// \brief The node queue used in training.
-    std::queue<Node> node_queue_;
-
-    /// \brief The instances of each node.
-    NodeMap<IterRange> instances_;
-
-    /// \brief The instance sample of the current node during training.
-    IterRange node_sample_;
-
-    /// \brief The node labels that were found in training. (Majority label)
-    NodeMap<LabelType> node_main_label_;
-
-    /// \brief The node labels that were found in training. (Count of each label)
-    NodeMap<std::vector<size_t> > node_labels_; // TODO: Fill this map in training.
-
-    /// \brief The maximum label that was found in training.
-    LabelType max_label_;
-
-};
-
-template <typename FEATURETYPE, typename LABELTYPE>
-ModularDecisionTree<FEATURETYPE, LABELTYPE>::ModularDecisionTree()
-    : labels_left(2),
-      labels_prior(2),
-      graph_(),
-      node_queue_(),
-      instances_(),
-      node_sample_(),
-      node_main_label_(),
-      node_labels_(),
-      max_label_(0)
-{}
-
-template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
-void ModularDecisionTree<FEATURETYPE, LABELTYPE>::train(
-        FEATURES const & data_x,
-        LABELS const & data_y
-){
-    typedef SAMPLER Sampler;
-    typedef TERMINATIONVISITOR TermVisitor;
-    typedef SPLITVISITOR SplitVisitor;
-
-    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
-                  "ModularDecisionTree::train(): Wrong feature type.");
-    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
-                  "ModularDecisionTree::train(): Wrong label type.");
-
-    size_t num_instances = data_x.num_instances();
-    vigra_precondition(num_instances == data_y.num_instances(),
-                       "ModularDecisionTree::train(): Input has wrong shape.");
-
-    // Create the bootstrap sample.
-    Sampler sampler;
-    std::vector<size_t> bootstrap_sample = sampler.bootstrap_sample(num_instances);
-
-    // Create the queue with the nodes to be split and place the root node with the bootstrap samples inside.
-    auto const rootnode = graph_.addNode();
-    instances_[rootnode] = {bootstrap_sample.begin(), bootstrap_sample.end()};
-    node_queue_.push(rootnode);
-
-    // Split the nodes.
-    TermVisitor term_visitor(data_y);
-    SplitVisitor split_visitor(data_x, data_y);
-    while (!node_queue_.empty())
-    {
-        // Get the next node.
-        auto const node = node_queue_.front();
-        node_queue_.pop();
-
-        // Draw a random sample of the instances.
-        node_sample_ = instances_[node];
-        sampler.split_sample(node_sample_.begin, node_sample_.end);
-
-        // Check the termination criterion.
-        term_visitor.visit(*this);
-        if (term_visitor.stop())
-        {
-            // Stop splitting and save the node labels.
-
-            // Save the labels of the instances in the node.
-            std::vector<size_t> label_count(max_label_+1, 0);
-            LabelType best_label = 0;
-            size_t best_count = 0;
-            for (auto it = node_sample_.begin; it != node_sample_.end; ++it)
-            {
-                size_t const label = static_cast<size_t>(data_y[*it]);
-                size_t count = ++label_count[label];
-                if (count > best_count)
-                {
-                    best_count = count;
-                    best_label = label;
-                }
-            }
-
-            node_main_label_[node] = best_label;
-            node_labels_[node] = label_count; // TODO: Maybe use std::move here.
-        }
-        else
-        {
-            // Split the node.
-            split_visitor.visit(*this);
-            auto const split_iter = split_visitor.apply_split(node_sample_.begin, node_sample_.end);
-
-            // Create the new nodes.
-            Node const left_node = graph_.addNode();
-            Node const right_node = graph_.addNode();
-            graph_.addArc(node, left_node);
-            graph_.addArc(node, right_node);
-            instances_[left_node] = {node_sample_.begin, split_iter};
-            instances_[right_node] = {split_iter, node_sample_.end};
-            node_queue_.push(left_node);
-            node_queue_.push(right_node);
-        }
-    }
-}
-
-
-
-template <typename FEATURETYPE, typename LABELTYPE>
-class ModularRandomForest
-{
-
-public:
-
-    typedef FEATURETYPE FeatureType;
-    typedef LABELTYPE LabelType;
-    typedef ModularDecisionTree<FeatureType, LabelType> Tree;
-
-    ModularRandomForest() = default;
-    ModularRandomForest(ModularRandomForest const &) = default;
-    ModularRandomForest(ModularRandomForest &&) = default;
-    ~ModularRandomForest() = default;
-    ModularRandomForest & operator=(ModularRandomForest const &) = default;
-    ModularRandomForest & operator=(ModularRandomForest &&) = default;
-
-    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
-    void train(
-            FEATURES const & data_x,
-            LABELS const & data_y,
-            size_t num_trees
-    );
-
-    template <typename FEATURES, typename LABELS>
-    void predict(
-            FEATURES const & data_x,
-            LABELS & data_y
-    ) const;
-
-protected:
-
-    std::vector<Tree> trees_;
-
-};
-
-
-
-template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATIONVISITOR, typename SPLITVISITOR>
-void ModularRandomForest<FEATURETYPE, LABELTYPE>::train(
-        FEATURES const & data_x,
-        LABELS const & data_y,
-        size_t num_trees
-){
-    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
-                  "ModularRandomForest::train(): Wrong feature type.");
-    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
-                  "ModularRandomForest::train(): Wrong label type.");
-
-    trees_.resize(num_trees);
-    for (size_t i = 0; i < trees_.size(); ++i)
-    {
-        std::cout << "training tree " << i << std::endl;
-        trees_[i].train<FEATURES, LABELS, SAMPLER, TERMINATIONVISITOR, SPLITVISITOR>(data_x, data_y);
-    }
-}
-
-template <typename FEATURETYPE, typename LABELTYPE>
-template <typename FEATURES, typename LABELS>
-void ModularRandomForest<FEATURETYPE, LABELTYPE>::predict(
-        FEATURES const & data_x,
-        LABELS & data_y
-) const {
-    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
-                  "ModularRandomForest::predict(): Wrong feature type.");
-    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
-                  "ModularRandomForest::predict(): Wrong label type.");
-
-    vigra_fail("Not implemented yet.");
 }
 
 
