@@ -44,7 +44,7 @@ namespace detail
         UniformIntRandomFunctor<MersenneTwister> rand;
         for (size_t i = 0; i < n; ++i)
         {
-            size_t k = rand() % num_instances;
+            size_t k = rand(num_instances);
             *out = begin[k];
             ++out;
         }
@@ -61,7 +61,7 @@ namespace detail
         UniformIntRandomFunctor<MersenneTwister> rand;
         for (size_t i = 0; i < n; ++i)
         {
-            size_t k = rand() % (num_instances-i);
+            size_t k = rand(num_instances-i);
             *out = values[k];
             ++out;
             values[k] = values[num_instances-i-1];
@@ -266,7 +266,7 @@ public:
     {
         std::vector<size_t> v(num_instances);
         for (size_t i = 0; i < v.size(); ++i)
-            v[i] = rand_() % num_instances;
+            v[i] = rand_(num_instances);
         return v;
     }
 
@@ -377,6 +377,7 @@ public:
         : rand_(rand)
     {}
 
+    /// \todo Add doc comment.
     template <typename ITER, typename FEATURES, typename LABELS>
     bool split(
             ITER const inst_begin,
@@ -396,7 +397,7 @@ public:
         std::iota(all_feat_indices.begin(), all_feat_indices.end(), 0);
         for (size_t i = 0; i < num_feats; ++i)
         {
-            size_t j = rand_() % (features.num_features()-i);
+            size_t j = i + (rand_(features.num_features()-i));
             std::swap(all_feat_indices[i], all_feat_indices[j]);
         }
 
@@ -441,7 +442,7 @@ public:
                 if (score < best_score)
                 {
                     best_score = score;
-                    best_split = (left+right)/2;
+                    best_split = 0.5*(left+right);
                     best_feat = feat;
                 }
             }
@@ -521,25 +522,6 @@ public:
 
 protected:
 
-    /// \brief Split the given node and return the children. If no split was performed, n0 and n1 are set to lemon::INVALID.
-    /// \param node: The node that will be split.
-    /// \param data_x: The features.
-    /// \param data_y: The labels.
-    /// \param[out] n0: The first child node.
-    /// \param[out] n1: The second child node.
-    /// \param label_buffer0: Buffer storage for labels.
-    /// \param label_buffer1: Buffer storage for labels.
-    template <typename FEATURES, typename LABELS>
-    void split(
-            Node const & node,
-            FEATURES const & data_x,
-            LABELS const & data_y,
-            Node & n0,
-            Node & n1,
-            std::vector<size_t> & label_buffer0,
-            std::vector<size_t> & label_buffer1
-    );
-
     /// \brief The graph structure.
     Tree tree_;
 
@@ -567,6 +549,11 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
         FEATURES const & features,
         LABELS const & labels
 ){
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "DecisionTree0::train(): Wrong feature type.");
+    static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
+                  "DecisionTree0::train(): Wrong label type.");
+
     vigra_precondition(num_labels_ > 0, "DecisionTree::train(): The number of distinct labels must be set before training.");
 
     // Create the bootstrap indices.
@@ -634,6 +621,13 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::predict(
         FEATURES const & test_x,
         LABELS & pred_y
 ) const {
+    // The features must be convertible to the internal feature type, so we can put them into the tree.
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "DecisionTree0::predict(): Wrong feature type.");
+
+    // The internal label type must be convertible to the given type, so we can put them into the output.
+    static_assert(std::is_convertible<LabelType, typename LABELS::value_type>(),
+                  "DecisionTree0::predict(): Wrong label type.");
 
     Node rootnode = tree_.getRoot();
     vigra_assert(tree_.valid(rootnode), "DecisionTree0::predict(): The graph has no root node.");
@@ -710,9 +704,9 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
         LABELS const & data_y,
         size_t const num_trees
 ){
-    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "RandomForest0::train(): Wrong feature type.");
-    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+    static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
                   "RandomForest0::train(): Wrong label type.");
 
     // Find the distinct labels.
@@ -729,7 +723,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
     MultiArray<1, size_t> data_y_id_arr(data_y.shape());
     for (size_t i = 0; i < data_y_id_arr.size(); ++i)
     {
-        data_y_id_arr[i] = label_id[data_y[i]];
+        data_y_id_arr[i] = label_id[data_y[i]]; // TODO: Maybe use () operator instead of [] operator.
     }
     LabelGetter<size_t> data_y_id(data_y_id_arr); // TODO: What if LABELS is specialized?
 
@@ -743,7 +737,8 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
 
     // Train each tree.
     dtrees_.resize(num_trees);
-    size_t const num_threads = std::thread::hardware_concurrency();
+    size_t num_threads = std::thread::hardware_concurrency();
+    num_threads = 1;
     if (num_threads <= 1)
     {
         // Single thread.
@@ -782,9 +777,12 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
         FEATURES const & test_x,
         LABELS & pred_y
 ) const {
-    static_assert(std::is_same<typename FEATURES::value_type, FeatureType>(),
+    // The features must be convertible to feature type, so we can put them into the forest.
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "RandomForest0::predict(): Wrong feature type.");
-    static_assert(std::is_same<typename LABELS::value_type, LabelType>(),
+
+    // The internal label type must be convertible to the labels, so we can put them into the output.
+    static_assert(std::is_convertible<LabelType, typename LABELS::value_type>(),
                   "RandomForest0::predict(): Wrong label type.");
 
     // Let each tree predict all instances.
