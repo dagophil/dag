@@ -4,11 +4,11 @@
 #include <vigra/multi_array.hxx>
 #include <vigra/random.hxx>
 #include <vigra/iteratorfacade.hxx>
-#include <queue>
 #include <map>
 #include <set>
 #include <type_traits>
 #include <thread>
+#include <stack>
 
 //#include "dagraph.hxx"
 #include "jungle.hxx"
@@ -561,20 +561,20 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
     std::vector<size_t> instance_indices = sampler.bootstrap_sample(labels.size());
 
     // Create the queue with the nodes to be split and place the root node with all instances inside.
-    std::queue<Node> node_queue;
+    std::stack<Node> node_stack;
     auto const rootnode = tree_.addNode();
     instance_ranges_[rootnode] = {instance_indices.begin(), instance_indices.end()};
-    node_queue.push(rootnode);
+    node_stack.push(rootnode);
 
     // Initialize the split functor with a random engine.
     UniformIntRandomFunctor<MersenneTwister> rand;
     SPLITFUNCTOR functor(rand);
 
     // Split the nodes.
-    while (!node_queue.empty())
+    while (!node_stack.empty())
     {
-        auto const node = node_queue.front();
-        node_queue.pop();
+        auto const node = node_stack.top();
+        node_stack.pop();
 
         // Draw a random sample of the instances.
         auto instances = instance_ranges_[node];
@@ -602,8 +602,8 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
                 instance_ranges_[n0] = {instances.begin, split_iter};
                 instance_ranges_[n1] = {split_iter, instances.end};
                 node_splits_[node] = {best_feat, best_split};
-                node_queue.push(n0);
-                node_queue.push(n1);
+                node_stack.push(n0);
+                node_stack.push(n1);
             }
         }
 
