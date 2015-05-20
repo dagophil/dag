@@ -72,7 +72,7 @@ namespace detail
 //    /// \param labels_left: Label counts of the left child.
 //    /// \param label_priors: Total label count.
 //    template <typename COUNTTYPE>
-//    float gini_impurity(
+//    double gini_impurity(
 //            std::vector<COUNTTYPE> const & labels_left,
 //            std::vector<COUNTTYPE> const & label_priors
 //    ){
@@ -90,12 +90,12 @@ namespace detail
 //        );
 //        CountType const n_right = n_total - n_left;
 
-//        float gini_left = 1;
-//        float gini_right = 1;
+//        double gini_left = 1;
+//        double gini_right = 1;
 //        for (size_t i = 0; i < labels_left.size(); ++i)
 //        {
-//            float const p_left = labels_left[i] / static_cast<float>(n_left);
-//            float const p_right = (label_priors[i] - labels_left[i]) / static_cast<float>(n_right);
+//            double const p_left = labels_left[i] / static_cast<double>(n_left);
+//            double const p_right = (label_priors[i] - labels_left[i]) / static_cast<double>(n_right);
 //            gini_left -= (p_left*p_left);
 //            gini_right -= (p_right*p_right);
 //        }
@@ -343,15 +343,15 @@ public:
         n_left_ = 0;
     }
 
-    float operator()() const {
-        float n_left = static_cast<float>(n_left_);
-        float n_right = static_cast<float>(n_total_ - n_left_);
-        float gini_left = 1;
-        float gini_right = 1;
+    double operator()() const {
+        double const n_left = static_cast<double>(n_left_);
+        double const n_right = static_cast<double>(n_total_ - n_left_);
+        double gini_left = 1;
+        double gini_right = 1;
         for (size_t i = 0; i < labels_left_.size(); ++i)
         {
-            float const p_left = labels_left_[i] / n_left;
-            float const p_right = (labels_prior_[i] - labels_left_[i]) / n_right;
+            double const p_left = labels_left_[i] / n_left;
+            double const p_right = (labels_prior_[i] - labels_left_[i]) / n_right;
             gini_left -= (p_left*p_left);
             gini_right -= (p_right*p_right);
         }
@@ -410,7 +410,7 @@ public:
         bool split_found = false;
 
         // Find the best split.
-        float best_score = std::numeric_limits<float>::max();
+        double best_score = std::numeric_limits<double>::max();
         for (size_t k = 0; k < num_feats; ++k)
         {
             auto const feat = all_feat_indices[k];
@@ -438,7 +438,7 @@ public:
 
                 // Update the best score.
                 split_found = true;
-                float const score = scorer();
+                double const score = scorer();
                 if (score < best_score)
                 {
                     best_score = score;
