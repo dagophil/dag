@@ -109,7 +109,7 @@ void test_randomforest0()
     typedef LabelGetter<LabelType> Labels;
     typedef BootstrapSampler Sampler;
     typedef PurityTermination Termination;
-    typedef RandomSplit<UniformIntRandomFunctor<MersenneTwister>, GiniScorer> SplitFunctor;
+    typedef RandomSplit<GiniScorer> SplitFunctor;
 
     // Test sample_with_replacement().
     {
@@ -176,6 +176,8 @@ void test_randomforest0()
         */
 
         // Train a random forest.
+//         MersenneTwister randengine(0);
+//         RandomForest0<FeatureType, LabelType> rf(randengine);
         RandomForest0<FeatureType, LabelType> rf;
         Features train_feats(train_x);
         Labels train_labels(train_y);

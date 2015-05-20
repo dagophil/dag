@@ -3,7 +3,6 @@
 
 #include <vigra/multi_array.hxx>
 #include <vigra/random.hxx>
-#include <vigra/iteratorfacade.hxx>
 #include <map>
 #include <set>
 #include <type_traits>
@@ -254,19 +253,15 @@ public:
 
     typedef std::vector<size_t>::iterator iterator;
     typedef std::vector<size_t>::const_iterator const_iterator;
-    typedef UniformIntRandomFunctor<MersenneTwister> Random;
-
-    /// \brief Create the bootstrap samples.
-    explicit BootstrapSampler()
-        : rand_()
-    {}
 
     /// \brief Create a bootstrap sample.
-    std::vector<size_t> bootstrap_sample(size_t num_instances) const
+    template <typename RANDENGINE>
+    std::vector<size_t> bootstrap_sample(size_t num_instances, RANDENGINE const & randengine) const
     {
+        UniformIntRandomFunctor<RANDENGINE> rand(randengine);
         std::vector<size_t> v(num_instances);
         for (size_t i = 0; i < v.size(); ++i)
-            v[i] = rand_(num_instances);
+            v[i] = rand(num_instances);
         return v;
     }
 
@@ -277,8 +272,6 @@ public:
     }
 
 protected:
-
-    Random rand_;
 
     std::vector<size_t> instances_;
 
@@ -368,23 +361,20 @@ protected:
 
 
 
-template <typename RAND, typename SCORER>
+template <typename SCORER>
 class RandomSplit
 {
 public:
 
-    RandomSplit(RAND const & rand)
-        : rand_(rand)
-    {}
-
     /// \todo Add doc comment.
-    template <typename ITER, typename FEATURES, typename LABELS>
+    template <typename ITER, typename FEATURES, typename LABELS, typename RANDENGINE>
     bool split(
             ITER const inst_begin,
             ITER const inst_end,
             FEATURES const & features,
             LABELS const & labels,
             size_t const num_labels,
+            RANDENGINE const & randengine,
             size_t & best_feat,
             typename FEATURES::value_type & best_split,
             ITER & split_iter
@@ -392,12 +382,13 @@ public:
         auto const num_instances = std::distance(inst_begin, inst_end);
 
         // Get a random subset of the features.
+        UniformIntRandomFunctor<RANDENGINE> rand(randengine);
         size_t const num_feats = std::ceil(std::sqrt(features.num_features()));
         std::vector<size_t> all_feat_indices(features.num_features());
         std::iota(all_feat_indices.begin(), all_feat_indices.end(), 0);
         for (size_t i = 0; i < num_feats; ++i)
         {
-            size_t j = i + (rand_(features.num_features()-i));
+            size_t j = i + (rand(features.num_features()-i));
             std::swap(all_feat_indices[i], all_feat_indices[j]);
         }
 
@@ -460,17 +451,12 @@ public:
         );
         return true;
     }
-
-protected:
-
-    RAND const & rand_;
-
 };
 
 
 
 /// \brief Simple decision tree class.
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE = MersenneTwister>
 class DecisionTree0
 {
 public:
@@ -480,15 +466,17 @@ public:
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
     typedef detail::Split<FeatureType> Split;
+    typedef RANDENGINE Randengine;
 
     template <typename T>
     using NodeMap = typename Tree::template NodeMap<T>;
 
-    DecisionTree0()
+    DecisionTree0(size_t const seed)
         : tree_(),
           node_labels_(),
           node_splits_(),
           num_labels_(0),
+          randengine_(seed),
           instance_ranges_()
     {}
 
@@ -534,6 +522,8 @@ protected:
     /// \brief The number of distinct labels.
     size_t num_labels_;
 
+    Randengine randengine_;
+
 private:
 
     typedef detail::IterRange<std::vector<size_t>::iterator > Range;
@@ -543,9 +533,9 @@ private:
 
 };
 
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION, typename SPLITFUNCTOR>
-void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
+void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         FEATURES const & features,
         LABELS const & labels
 ){
@@ -558,7 +548,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
 
     // Create the bootstrap indices.
     SAMPLER sampler;
-    std::vector<size_t> instance_indices = sampler.bootstrap_sample(labels.size());
+    std::vector<size_t> instance_indices = sampler.bootstrap_sample(labels.size(), randengine_);
 
     // Create the queue with the nodes to be split and place the root node with all instances inside.
     std::stack<Node> node_stack;
@@ -567,8 +557,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
     node_stack.push(rootnode);
 
     // Initialize the split functor with a random engine.
-    UniformIntRandomFunctor<MersenneTwister> rand;
-    SPLITFUNCTOR functor(rand);
+    SPLITFUNCTOR functor;
 
     // Split the nodes.
     while (!node_stack.empty())
@@ -591,7 +580,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
             size_t best_feat;
             FeatureType best_split;
             std::vector<size_t>::iterator split_iter;
-            split_found = functor.split(instances.begin, instances.end, features, labels, num_labels_, best_feat, best_split, split_iter);
+            split_found = functor.split(instances.begin, instances.end, features, labels, num_labels_, randengine_, best_feat, best_split, split_iter);
             if (split_found)
             {
                 // Add the child nodes to the graph.
@@ -615,9 +604,9 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::train(
     }
 }
 
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES, typename LABELS>
-void DecisionTree0<FEATURETYPE, LABELTYPE>::predict(
+void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         FEATURES const & test_x,
         LABELS & pred_y
 ) const {
@@ -656,16 +645,19 @@ void DecisionTree0<FEATURETYPE, LABELTYPE>::predict(
 
 
 /// \brief Random forest class.
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE = MersenneTwister>
 class RandomForest0
 {
 public:
 
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
-    typedef DecisionTree0<FeatureType, size_t> Tree;
+    typedef DecisionTree0<FeatureType, size_t, RANDENGINE> Tree;
 
-    RandomForest0() = default;
+    RandomForest0(RANDENGINE const & randengine = RANDENGINE::global())
+        : randengine_(randengine)
+    {}
+
     RandomForest0(RandomForest0 const &) = default;
     RandomForest0(RandomForest0 &&) = default;
     ~RandomForest0() = default;
@@ -673,11 +665,12 @@ public:
     RandomForest0 & operator=(RandomForest0 &&) = default;
 
     /// \brief Train the random forest.
-    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION, typename RANDOMSPLIT>
+    template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION, typename SPLITFUNCTOR>
     void train(
             FEATURES const & train_x,
             LABELS const & train_y,
-            size_t num_trees
+            size_t num_trees,
+            int num_threads = -1
     );
 
     /// \brief Predict new data using the forest.
@@ -695,19 +688,25 @@ protected:
     /// \brief The distinct labels that were found in training.
     std::vector<LabelType> distinct_labels_;
 
+    RANDENGINE const & randengine_;
+
 };
 
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES, typename LABELS, typename SAMPLER, typename TERMINATION, typename SPLITFUNCTOR>
-void RandomForest0<FEATURETYPE, LABELTYPE>::train(
+void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         FEATURES const & data_x,
         LABELS const & data_y,
-        size_t const num_trees
+        size_t const num_trees,
+        int num_threads
 ){
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "RandomForest0::train(): Wrong feature type.");
     static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
                   "RandomForest0::train(): Wrong label type.");
+
+    vigra_precondition(num_threads == -1 || num_threads > 0,
+                       "RandomForest0::train(): n_threads must be -1 or greater than zero.");
 
     // Find the distinct labels.
     std::set<LabelType> dlabels(data_y.begin(), data_y.end());
@@ -735,10 +734,25 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
         dtrees_[i].train<FEATURES, LabelGetter<size_t>, SAMPLER, TERMINATION, SPLITFUNCTOR>(data_x, data_y_id);
     };
 
+    // Create the seeds for the trees. Make sure that they are all different.
+    UniformIntRandomFunctor<RANDENGINE> rand(randengine_);
+    std::set<size_t> seeds;
+    while (seeds.size() < num_trees)
+    {
+        seeds.insert(rand());
+    }
+    vigra_assert(seeds.size() == num_trees, "RandomForest0::train(): Somehow we got more seeds than trees.");
+
+    // Initialize the trees with the seeds.
+    dtrees_.reserve(num_trees);
+    for (auto it = seeds.begin(); it != seeds.end(); ++it)
+    {
+        dtrees_.push_back(Tree(*it));
+    }
+
     // Train each tree.
-    dtrees_.resize(num_trees);
-    size_t num_threads = std::thread::hardware_concurrency();
-    num_threads = 1;
+    if (num_threads == -1)
+        num_threads = std::thread::hardware_concurrency(); // might return 0 if the value is not computable
     if (num_threads <= 1)
     {
         // Single thread.
@@ -749,7 +763,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
     }
     else
     {
-        // Multiple threads.
+        // Create one worker per thread and let them train the trees.
         std::vector<std::thread> workers;
         for (size_t k = 0; k < num_threads; ++k)
         {
@@ -771,9 +785,9 @@ void RandomForest0<FEATURETYPE, LABELTYPE>::train(
     }
 }
 
-template <typename FEATURETYPE, typename LABELTYPE>
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES, typename LABELS>
-void RandomForest0<FEATURETYPE, LABELTYPE>::predict(
+void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         FEATURES const & test_x,
         LABELS & pred_y
 ) const {
