@@ -192,6 +192,8 @@ public:
 
 protected:
 
+    void makeLeaves() const;
+
     struct NodeT
     {
         index_type prev;
@@ -212,6 +214,8 @@ protected:
     size_t num_arcs_;
     mutable index_type root_node_;
     mutable bool root_changed_;
+    mutable std::vector<size_t> leaf_indices_;
+    mutable bool leaves_changed_;
 
 };
 
@@ -222,7 +226,9 @@ inline BinaryTree::BinaryTree()
       num_nodes_(0),
       num_arcs_(0),
       root_node_(0),
-      root_changed_(false)
+      root_changed_(false),
+      leaf_indices_(),
+      leaves_changed_(true)
 {}
 
 inline BinaryTree::Node BinaryTree::addNode()
@@ -250,6 +256,7 @@ inline BinaryTree::Node BinaryTree::addNode()
     nodes_[id].right_child = -1;
 
     ++num_nodes_;
+    leaves_changed_ = true;
     return Node(id);
 }
 
@@ -275,10 +282,12 @@ inline BinaryTree::Arc BinaryTree::addArc(
     {
         vigra_fail("BinaryTree::addArc(): The node u already has two children.");
     }
+
     nodes_[v.id()].parent = u.id();
 
-    ++num_arcs_;
     root_changed_ = true;
+    leaves_changed_ = true;
+    ++num_arcs_;
     return Arc(arc_id);
 }
 
@@ -337,6 +346,7 @@ inline void BinaryTree::erase(
     n.prev = -2;
     --num_nodes_;
     root_changed_ = true;
+    leaves_changed_ = true;
 }
 
 inline void BinaryTree::erase(
@@ -357,6 +367,7 @@ inline void BinaryTree::erase(
     }
     --num_arcs_;
     root_changed_ = true;
+    leaves_changed_ = true;
 }
 
 inline bool BinaryTree::valid(
@@ -530,8 +541,8 @@ inline BinaryTree::Node BinaryTree::getChild(
 
 inline size_t BinaryTree::numLeaves() const
 {
-    // TODO: Implement.
-    vigra_fail("Not implemented yet.");
+    makeLeaves();
+    return leaf_indices_.size();
 }
 
 inline BinaryTree::Node BinaryTree::getRoot() const
@@ -560,8 +571,24 @@ inline BinaryTree::Node BinaryTree::getRoot() const
 inline BinaryTree::Node BinaryTree::getLeafNode(
         size_t i
 ) const {
-    // TODO: Implement.
-    vigra_fail("Not implemented yet.");
+    makeLeaves();
+    return Node(leaf_indices_[i]);
+}
+
+inline void BinaryTree::makeLeaves() const
+{
+    if (leaves_changed_)
+    {
+        leaf_indices_.clear();
+        for (size_t i = 0; i < nodes_.size(); ++i)
+        {
+            if (outDegree(Node(i)) == 0)
+            {
+                leaf_indices_.push_back(i);
+            }
+        }
+    }
+    leaves_changed_ = false;
 }
 
 
