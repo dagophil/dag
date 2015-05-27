@@ -461,15 +461,15 @@ class DecisionTree0
 {
 public:
 
-    typedef BinaryTree Tree;
-    typedef typename Tree::Node Node;
+    typedef BinaryTree Graph;
+    typedef typename Graph::Node Node;
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
     typedef detail::Split<FeatureType> Split;
     typedef RANDENGINE Randengine;
 
     template <typename T>
-    using NodeMap = typename Tree::template NodeMap<T>;
+    using NodeMap = typename Graph::template NodeMap<T>;
 
     DecisionTree0(size_t const seed)
         : tree_(),
@@ -508,10 +508,34 @@ public:
         num_labels_ = num_labels;
     }
 
+    /// \brief Return the number of leaves.
+    size_t num_leaves() const
+    {
+        return tree_.numLeaves();
+    }
+
+    /// \brief Return the label of the leaf with the given index.
+    LabelType leaf_label(size_t leaf_index) const
+    {
+        return node_labels_.at(tree_.getLeafNode(leaf_index));
+    }
+
+    /// \brief Return the graph structure.
+    Graph const & get_graph() const
+    {
+        return tree_;
+    }
+
+    /// \brief Return the node labels.
+    NodeMap<LabelType> const & node_labels() const
+    {
+        return node_labels_;
+    }
+
 protected:
 
     /// \brief The graph structure.
-    Tree tree_;
+    Graph tree_;
 
     /// \brief The node labels that were found in training.
     NodeMap<LabelType> node_labels_;
@@ -522,6 +546,7 @@ protected:
     /// \brief The number of distinct labels.
     size_t num_labels_;
 
+    /// \brief The random engine.
     Randengine randengine_;
 
 private:
@@ -680,6 +705,31 @@ public:
             LABELS & pred_y
     ) const;
 
+    std::vector<Tree> & trees()
+    {
+        return dtrees_;
+    }
+
+    std::vector<Tree> const & trees() const
+    {
+        return dtrees_;
+    }
+
+    size_t num_classes() const
+    {
+        return distinct_labels_.size();
+    }
+
+    std::vector<typename Tree::Graph> get_graph() const
+    {
+        std::vector<typename Tree::Graph> graph;
+        for (Tree const & tree : dtrees_)
+        {
+            graph.push_back(tree.get_graph());
+        }
+        return graph;
+    }
+
 protected:
 
     /// \brief The trees of the forest.
@@ -837,6 +887,89 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         pred_y[i] = distinct_labels_[max_label];
     }
 }
+
+
+
+template <typename RANDOMFOREST>
+class GloballyRefinedRandomForest
+{
+public:
+
+    typedef RANDOMFOREST RandomForest;
+    typedef typename RandomForest::FeatureType FeatureType;
+    typedef typename RandomForest::LabelType LabelType;
+    typedef typename RandomForest::Tree Tree;
+
+    GloballyRefinedRandomForest(RANDOMFOREST const & rf)
+        : rf_(rf)
+    {}
+
+    template <typename FEATURES, typename LABELS>
+    void train(
+            FEATURES const & features,
+            LABELS const & labels
+    );
+
+    template <typename FEATURES, typename LABELS>
+    void predict(
+            FEATURES const & features,
+            LABELS & pred_y
+    ) const;
+
+protected:
+
+    RandomForest const & rf_;
+
+    ConstForestAdaptor<typename Tree::Graph> rf_adaptor_;
+
+    MultiArray<2, double> weights_;
+
+};
+
+template <typename RANDOMFOREST>
+template <typename FEATURES, typename LABELS>
+void GloballyRefinedRandomForest<RANDOMFOREST>::train(
+        FEATURES const & features,
+        LABELS const & labels
+){
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "GloballyRefinedRandomForest::train(): Wrong feature type.");
+    static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
+                  "GloballyRefinedRandomForest::train(): Wrong label type.");
+
+    vigra_precondition(rf_.num_classes() == 2,
+                       "GloballyRefinedRandomForest::train(): Curently only implemented for binary random forests.");
+
+    typedef typename Tree::Graph TreeGraph;
+    typedef typename Tree:: template NodeMap<typename Tree::LabelType> TreeNodeMap;
+
+    std::vector<TreeGraph> tree_graphs;
+    std::vector<TreeNodeMap> tree_node_maps;
+    for (Tree const & tree : rf_.trees())
+    {
+        tree_graphs.push_back(tree.get_graph());
+        tree_node_maps.push_back(tree.node_labels());
+    }
+
+    rf_adaptor_.set_forest(tree_graphs);
+    auto m = rf_adaptor_.merge_node_maps(tree_node_maps);
+
+    //
+    // rf_adaptor: contains graph structure, so we can get all leaf nodes
+    // m: contains all node labels, so we can get the response of all leaves
+    //
+
+//    weights_.reshape(Shape2(rf_.num_classes(), rf_adaptor.num_leaves()));
+//    for (leaf_node : rf_adaptor.leaves())
+//    {
+//        // fill the weights
+
+//    }
+
+    std::cout << "Done training globally refined RF" << std::endl;
+}
+
+
 
 
 

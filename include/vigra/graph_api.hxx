@@ -220,6 +220,9 @@ public:
     /// \brief Return the arc with the given id.
     Arc arcFromId(index_type const & id) const;
 
+    /// \brief Return the maximum node id of the currently saved nodes.
+    index_type maxNodeId() const;
+
     /// \brief Return the number of nodes.
     size_t numNodes() const;
 

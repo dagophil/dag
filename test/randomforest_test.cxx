@@ -198,15 +198,74 @@ void test_randomforest0()
                 ++count;
         }
         std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
-
     }
 
     std::cout << "test_randomforest0(): Success!" << std::endl;
+}
+
+void test_globallyrefinedrf()
+{
+    using namespace vigra;
+
+    typedef float FeatureType;
+    typedef UInt8 LabelType;
+    typedef FeatureGetter<FeatureType> Features;
+    typedef LabelGetter<LabelType> Labels;
+    typedef BootstrapSampler Sampler;
+    typedef PurityTermination Termination;
+    typedef RandomSplit<GiniScorer> SplitFunctor;
+    typedef RandomForest0<FeatureType, LabelType> RandomForest;
+
+    {
+        // Load some data.
+        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+        std::vector<LabelType> labels = {3, 8};
+        MultiArray<2, FeatureType> train_x;
+        MultiArray<1, LabelType> train_y;
+        MultiArray<2, FeatureType> test_x;
+        MultiArray<1, LabelType> test_y;
+        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
+
+        // Train a random forest.
+        RandomForest rf;
+        Features train_feats(train_x);
+        Labels train_labels(train_y);
+        rf.train<Features, Labels, Sampler, Termination, SplitFunctor>(
+                    train_feats, train_labels, 8
+        );
+
+        // Predict on the test set (for comparison).
+        {
+            // Predict using the forest.
+            MultiArray<1, LabelType> pred_y(test_y.shape());
+            Features test_feats(test_x);
+            rf.predict(test_feats, pred_y);
+
+            // Count the correct predicted instances.
+            size_t count = 0;
+            for (size_t i = 0; i < test_y.size(); ++i)
+            {
+                if (pred_y[i] == test_y[i])
+                    ++count;
+            }
+            std::cout << "RF performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+        }
+
+        // Train a globally refined random forest.
+        GloballyRefinedRandomForest<RandomForest> grf(rf);
+        grf.train(train_feats, train_labels);
+
+
+
+
+    }
 }
 
 
 
 int main()
 {
-    test_randomforest0();
+//    test_randomforest0();
+    test_globallyrefinedrf();
 }

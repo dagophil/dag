@@ -98,6 +98,8 @@ namespace detail
         typedef value_type & reference;
         typedef value_type const & const_reference;
         typedef MAP Map;
+        typedef typename Map::iterator iterator;
+        typedef typename Map::const_iterator const_iterator;
         reference at(key_type const & k)
         {
             return map_.at(k);
@@ -109,6 +111,22 @@ namespace detail
         reference operator[](key_type const & k)
         {
             return map_[k];
+        }
+        iterator begin()
+        {
+            return map_.begin();
+        }
+        const_iterator begin() const
+        {
+            return map_.begin();
+        }
+        iterator end()
+        {
+            return map_.end();
+        }
+        const_iterator end() const
+        {
+            return map_.end();
         }
     protected:
         Map map_;
@@ -157,6 +175,8 @@ public:
     Node nodeFromId(index_type const & id) const;
 
     Arc arcFromId(index_type const & id) const;
+
+    index_type maxNodeId() const;
 
     size_t numNodes() const;
 
@@ -431,6 +451,11 @@ inline BinaryTree::Arc BinaryTree::arcFromId(
     return Arc(id);
 }
 
+inline BinaryTree::index_type BinaryTree::maxNodeId() const
+{
+    return nodes_.size()-1;
+}
+
 inline size_t BinaryTree::numNodes() const
 {
     return num_nodes_;
@@ -590,6 +615,81 @@ inline void BinaryTree::makeLeaves() const
     }
     leaves_changed_ = false;
 }
+
+
+
+/// \brief Takes a vector of trees and provides the graph api.
+template <typename TREE>
+class ConstForestAdaptor
+{
+public:
+
+    typedef TREE Tree;
+    typedef Int64 index_type;
+    typedef detail::IndexNode<index_type> Node;
+    typedef typename Tree::Node TreeNode;
+    // TODO: Implement the rest of the graph API.
+
+    template <typename T>
+    using NodeMap = detail::PropertyMap<Node, T>;
+
+    ConstForestAdaptor()
+        : forest_()
+    {}
+
+    ConstForestAdaptor(std::vector<Tree> const & forest)
+        : forest_(forest)
+    {}
+
+    void set_forest(std::vector<Tree> const & forest)
+    {
+        forest_ = forest;
+    }
+
+    Node tree_to_forest(
+            size_t tree_index,
+            TreeNode const & tree_node
+    ) const {
+        size_t id = 0;
+        for (size_t i = 0; i < tree_index; ++i)
+        {
+            id += forest_[tree_index].maxNodeId()+1;
+        }
+        id += tree_node.id();
+        return Node(id);
+    }
+
+    template <typename TREEMAP>
+    NodeMap<typename TREEMAP::value_type> merge_node_maps(
+            std::vector<TREEMAP> const & maps
+    ) const {
+        return merge_maps<NodeMap<typename TREEMAP::value_type>, TREEMAP>(maps);
+    }
+
+    template <typename MAP, typename TREEMAP>
+    MAP merge_maps(
+            std::vector<TREEMAP> const & maps
+    ) const {
+        vigra_precondition(maps.size() == forest_.size(),
+                           "ConstForestAdaptor::merge_maps(): Number of maps must be equal to number of trees.");
+
+        MAP merged_map;
+        for (size_t i = 0; i < maps.size(); ++i)
+        {
+            TREEMAP const & map = maps[i];
+            for (auto it = map.begin(); it != map.end(); ++it)
+            {
+                Node forest_node = tree_to_forest(i, it->first);
+                merged_map[forest_node] = it->second;
+            }
+        }
+        return merged_map;
+    }
+
+protected:
+
+    std::vector<Tree> forest_;
+};
 
 
 
