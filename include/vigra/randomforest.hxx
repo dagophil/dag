@@ -899,6 +899,7 @@ public:
     typedef typename RandomForest::FeatureType FeatureType;
     typedef typename RandomForest::LabelType LabelType;
     typedef typename RandomForest::Tree Tree;
+    typedef ConstForestAdaptor<typename Tree::Graph> ForestAdaptor;
 
     GloballyRefinedRandomForest(RANDOMFOREST const & rf)
         : rf_(rf)
@@ -920,7 +921,7 @@ protected:
 
     RandomForest const & rf_;
 
-    ConstForestAdaptor<typename Tree::Graph> rf_adaptor_;
+    ForestAdaptor rf_adaptor_;
 
     MultiArray<2, double> weights_;
 
@@ -942,7 +943,9 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
 
     typedef typename Tree::Graph TreeGraph;
     typedef typename Tree:: template NodeMap<typename Tree::LabelType> TreeNodeMap;
+    typedef typename ForestAdaptor::Node Node;
 
+    // Create an adaptor for the graph structure and the property maps.
     std::vector<TreeGraph> tree_graphs;
     std::vector<TreeNodeMap> tree_node_maps;
     for (Tree const & tree : rf_.trees())
@@ -950,21 +953,27 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         tree_graphs.push_back(tree.get_graph());
         tree_node_maps.push_back(tree.node_labels());
     }
-
     rf_adaptor_.set_forest(tree_graphs);
-    auto m = rf_adaptor_.merge_node_maps(tree_node_maps);
+    auto node_labels = rf_adaptor_.merge_node_maps(tree_node_maps);
 
-    //
-    // rf_adaptor: contains graph structure, so we can get all leaf nodes
-    // m: contains all node labels, so we can get the response of all leaves
-    //
+    // Create the weight matrix.
+    weights_.reshape(Shape2(rf_adaptor_.numLeaves(), rf_.num_classes()));
+    for (size_t i = 0; i < rf_adaptor_.numLeaves(); ++i)
+    {
+        Node node = rf_adaptor_.getLeafNode(i);
+        auto label = node_labels[node];
 
-//    weights_.reshape(Shape2(rf_.num_classes(), rf_adaptor.num_leaves()));
-//    for (leaf_node : rf_adaptor.leaves())
-//    {
-//        // fill the weights
+        vigra_assert(label == 0 || label == 1,
+                     "GloballyRefinedRandomForest::train(): Currently only implemented for two class problem with classes 0 and 1.");
 
-//    }
+        weights_(i, label) = 1;
+        weights_(i, 1-label) = 0;
+    }
+
+    // TODO: Train SVM.
+
+
+
 
     std::cout << "Done training globally refined RF" << std::endl;
 }

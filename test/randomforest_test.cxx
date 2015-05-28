@@ -253,6 +253,7 @@ void test_globallyrefinedrf()
         }
 
         // Train a globally refined random forest.
+        std::cout << "Applying global refinement." << std::endl;
         GloballyRefinedRandomForest<RandomForest> grf(rf);
         grf.train(train_feats, train_labels);
 

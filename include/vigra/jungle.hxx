@@ -641,11 +641,13 @@ public:
         : forest_(forest)
     {}
 
+    /// \brief Setter for forest.
     void set_forest(std::vector<Tree> const & forest)
     {
         forest_ = forest;
     }
 
+    /// \brief Return a node descriptor for the given node in the given tree.
     Node tree_to_forest(
             size_t tree_index,
             TreeNode const & tree_node
@@ -659,6 +661,45 @@ public:
         return Node(id);
     }
 
+    /// \brief Return the number of leaves.
+    size_t numLeaves() const
+    {
+        size_t num = 0;
+        for (auto const & tree : forest_)
+        {
+            num += tree.numLeaves();
+        }
+        return num;
+    }
+
+    /// \brief Return the i-th leaf node in the forest.
+    Node getLeafNode(size_t index) const
+    {
+        TreeNode tree_node = lemon::INVALID;
+        size_t i;
+        for (i = 0; i < forest_.size(); ++i)
+        {
+            if (index < forest_[i].numLeaves())
+            {
+                tree_node = forest_[i].getLeafNode(index);
+                break;
+            }
+            else
+            {
+                index -= forest_[i].numLeaves();
+            }
+        }
+        if (tree_node == lemon::INVALID)
+        {
+            return Node(lemon::INVALID);
+        }
+        else
+        {
+            return tree_to_forest(i, tree_node);
+        }
+    }
+
+    /// \brief Return a single node map that contains the data of the given tree node maps.
     template <typename TREEMAP>
     NodeMap<typename TREEMAP::value_type> merge_node_maps(
             std::vector<TREEMAP> const & maps
@@ -666,6 +707,7 @@ public:
         return merge_maps<NodeMap<typename TREEMAP::value_type>, TREEMAP>(maps);
     }
 
+    /// \brief Return a single property map that contains the data of the given tree property maps.
     template <typename MAP, typename TREEMAP>
     MAP merge_maps(
             std::vector<TREEMAP> const & maps
