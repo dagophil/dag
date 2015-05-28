@@ -678,6 +678,7 @@ public:
     typedef FEATURETYPE FeatureType;
     typedef LABELTYPE LabelType;
     typedef DecisionTree0<FeatureType, size_t, RANDENGINE> Tree;
+    typedef typename Tree::Node TreeNode;
 
     RandomForest0(RANDENGINE const & randengine = RANDENGINE::global())
         : randengine_(randengine)
@@ -705,21 +706,26 @@ public:
             LABELS & pred_y
     ) const;
 
+    /// \brief Return the tree vector.
     std::vector<Tree> & trees()
     {
         return dtrees_;
     }
 
+
+    /// \brief Return the tree vector.
     std::vector<Tree> const & trees() const
     {
         return dtrees_;
     }
 
+    /// \brief Return the number of classes.
     size_t num_classes() const
     {
         return distinct_labels_.size();
     }
 
+    /// \brief Return the graph vector.
     std::vector<typename Tree::Graph> get_graph() const
     {
         std::vector<typename Tree::Graph> graph;
@@ -729,6 +735,12 @@ public:
         }
         return graph;
     }
+
+    /// \brief For each tree return the indices of the leaf (leaves) that contain the given instances.
+    template <typename FEATURES>
+    std::vector<TreeNode> leaf_indices(
+            FEATURES const & features
+    ) const;
 
 protected:
 
@@ -889,6 +901,22 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
 }
 
 
+/// \brief For each tree return the indices of the leaf (leaves) that contain the given instances.
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
+template <typename FEATURES>
+auto RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_indices(
+        FEATURES const & features
+) const
+    -> std::vector<TreeNode>
+{
+    // TODO: Implement this.
+    // TODO: Maybe use a MultiArray as return type.
+
+
+
+}
+
+
 
 template <typename RANDOMFOREST>
 class GloballyRefinedRandomForest
@@ -977,8 +1005,6 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
 
     std::cout << "Done training globally refined RF" << std::endl;
 }
-
-
 
 
 
