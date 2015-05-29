@@ -970,6 +970,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
                        "GloballyRefinedRandomForest::train(): Curently only implemented for binary random forests.");
 
     typedef typename Tree::Graph TreeGraph;
+    typedef typename TreeGraph::Node TreeNode;
     typedef typename Tree:: template NodeMap<typename Tree::LabelType> TreeNodeMap;
     typedef typename ForestAdaptor::Node Node;
 
@@ -999,6 +1000,8 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     }
 
     // TODO: Train SVM.
+
+
 
 
 

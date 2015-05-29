@@ -128,6 +128,11 @@ namespace detail
         {
             return map_.end();
         }
+        void clear()
+        {
+            map_.clear();
+        }
+
     protected:
         Map map_;
     };
@@ -210,6 +215,9 @@ public:
 
     Node getLeafNode(size_t i) const;
 
+    /// \brief Return the index i that gives the node with getLeafNode(i).
+    size_t getLeafIndex(Node const & node) const;
+
 protected:
 
     void makeLeaves() const;
@@ -234,8 +242,9 @@ protected:
     size_t num_arcs_;
     mutable index_type root_node_;
     mutable bool root_changed_;
-    mutable std::vector<size_t> leaf_indices_;
+    mutable std::vector<size_t> leaf_ids_; // vector with the node ids of all leaf nodes
     mutable bool leaves_changed_;
+    mutable NodeMap<size_t> leaf_indices_; // leaf node map that stores the index in the leaf_ids_ vector
 
 };
 
@@ -247,8 +256,9 @@ inline BinaryTree::BinaryTree()
       num_arcs_(0),
       root_node_(0),
       root_changed_(false),
-      leaf_indices_(),
-      leaves_changed_(true)
+      leaf_ids_(),
+      leaves_changed_(true),
+      leaf_indices_()
 {}
 
 inline BinaryTree::Node BinaryTree::addNode()
@@ -567,7 +577,7 @@ inline BinaryTree::Node BinaryTree::getChild(
 inline size_t BinaryTree::numLeaves() const
 {
     makeLeaves();
-    return leaf_indices_.size();
+    return leaf_ids_.size();
 }
 
 inline BinaryTree::Node BinaryTree::getRoot() const
@@ -597,23 +607,33 @@ inline BinaryTree::Node BinaryTree::getLeafNode(
         size_t i
 ) const {
     makeLeaves();
-    return Node(leaf_indices_[i]);
+    return Node(leaf_ids_[i]);
 }
 
 inline void BinaryTree::makeLeaves() const
 {
     if (leaves_changed_)
     {
+        leaf_ids_.clear();
         leaf_indices_.clear();
         for (size_t i = 0; i < nodes_.size(); ++i)
         {
             if (outDegree(Node(i)) == 0)
             {
-                leaf_indices_.push_back(i);
+                leaf_ids_.push_back(i);
+                leaf_indices_[Node(i)] = leaf_ids_.size()-1;
             }
         }
     }
     leaves_changed_ = false;
+}
+
+inline size_t BinaryTree::getLeafIndex(
+        Node const & node
+) const {
+    makeLeaves();
+//    return leaf_indices_[node];
+    return leaf_indices_.at(node);
 }
 
 
@@ -652,13 +672,34 @@ public:
             size_t tree_index,
             TreeNode const & tree_node
     ) const {
-        size_t id = 0;
+        size_t id = forest_[tree_index].getLeafIndex(tree_node);
         for (size_t i = 0; i < tree_index; ++i)
         {
-            id += forest_[tree_index].maxNodeId()+1;
+            id += forest_[i].numLeaves();
         }
-        id += tree_node.id();
         return Node(id);
+    }
+
+    /// \brief Take the give node, find the tree that holds it and return tree index and the tree node.
+    void forest_to_tree(
+            Node const & node,
+            size_t & tree_index,
+            TreeNode & tree_node
+    ) const {
+        size_t id = node.id();
+        for (tree_index = 0; tree_index < forest_.size(); ++tree_index)
+        {
+            if (id < forest_[tree_index].numLeaves())
+            {
+                tree_node = TreeNode(forest_[tree_index].getLeafNode(id));
+                return;
+            }
+            else
+            {
+                id -= forest_[tree_index].numLeaves();
+            }
+        }
+        vigra_fail("ConstForestAdaptor::forest_to_tree(): The given node is not in the graph.");
     }
 
     /// \brief Return the number of leaves.
@@ -675,28 +716,13 @@ public:
     /// \brief Return the i-th leaf node in the forest.
     Node getLeafNode(size_t index) const
     {
-        TreeNode tree_node = lemon::INVALID;
-        size_t i;
-        for (i = 0; i < forest_.size(); ++i)
-        {
-            if (index < forest_[i].numLeaves())
-            {
-                tree_node = forest_[i].getLeafNode(index);
-                break;
-            }
-            else
-            {
-                index -= forest_[i].numLeaves();
-            }
-        }
-        if (tree_node == lemon::INVALID)
-        {
-            return Node(lemon::INVALID);
-        }
-        else
-        {
-            return tree_to_forest(i, tree_node);
-        }
+        return Node(index);
+    }
+
+    /// \brief Return the index of the given node.
+    size_t getLeafIndex(Node const & node) const
+    {
+        return node.id();
     }
 
     /// \brief Return a single node map that contains the data of the given tree node maps.
