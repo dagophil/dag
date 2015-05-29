@@ -237,6 +237,8 @@ void test_globallyrefinedrf()
 
         // Predict on the test set (for comparison).
         {
+            std::cout << "Predicting" << std::endl;
+
             // Predict using the forest.
             MultiArray<1, LabelType> pred_y(test_y.shape());
             Features test_feats(test_x);

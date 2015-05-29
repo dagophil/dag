@@ -532,6 +532,13 @@ public:
         return node_labels_;
     }
 
+    /// \brief Return the node ids of the leaves that contains the given instances.
+    template <typename FEATURES>
+    void leaf_ids(
+            FEATURES const & features,
+            MultiArrayView<1, size_t> & indices
+    ) const;
+
 protected:
 
     /// \brief The graph structure.
@@ -643,7 +650,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     static_assert(std::is_convertible<LabelType, typename LABELS::value_type>(),
                   "DecisionTree0::predict(): Wrong label type.");
 
-    Node rootnode = tree_.getRoot();
+    Node const rootnode = tree_.getRoot();
     vigra_assert(tree_.valid(rootnode), "DecisionTree0::predict(): The graph has no root node.");
 
     for (size_t i = 0; i < test_x.num_instances(); ++i)
@@ -664,6 +671,42 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
              }
         }
         pred_y[i] = node_labels_.at(node);
+    }
+}
+
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
+template <typename FEATURES>
+void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
+        FEATURES const & features,
+        MultiArrayView<1, size_t> & indices
+) const {
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "DecisionTree0::leaf_indices(): Wrong feature type.");
+
+    vigra_precondition(features.num_instances() == indices.size(),
+                       "DecisionTree0::leaf_indices(): Shape mismatch.");
+
+    Node const rootnode = tree_.getRoot();
+    vigra_assert(tree_.valid(rootnode), "DecisionTree0::leaf_indices(): The graph has no root node.");
+
+    for (size_t i = 0; i < features.num_instances(); ++i)
+    {
+        auto const feats = features.instance_features(i);
+        Node node = rootnode;
+
+        while (tree_.outDegree(node) > 0)
+        {
+            auto const & s = node_splits_.at(node);
+            if (feats[s.feature_index] < s.thresh)
+            {
+                node = tree_.getChild(node, 0);
+            }
+            else
+            {
+                node = tree_.getChild(node, 1);
+            }
+        }
+        indices[i] = node.id();
     }
 }
 
@@ -719,6 +762,12 @@ public:
         return dtrees_;
     }
 
+    /// \brief Return the number of trees.
+    size_t num_trees() const
+    {
+        return dtrees_.size();
+    }
+
     /// \brief Return the number of classes.
     size_t num_classes() const
     {
@@ -736,10 +785,11 @@ public:
         return graph;
     }
 
-    /// \brief For each tree return the indices of the leaf (leaves) that contain the given instances.
+    /// \brief For each tree return the node ids of the leaves that contain the given instances.
     template <typename FEATURES>
-    std::vector<TreeNode> leaf_indices(
-            FEATURES const & features
+    void leaf_ids(
+            FEATURES const & features,
+            MultiArrayView<2, size_t> & indices
     ) const;
 
 protected:
@@ -904,16 +954,21 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
 /// \brief For each tree return the indices of the leaf (leaves) that contain the given instances.
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES>
-auto RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_indices(
-        FEATURES const & features
-) const
-    -> std::vector<TreeNode>
-{
-    // TODO: Implement this.
-    // TODO: Maybe use a MultiArray as return type.
+void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
+        FEATURES const & features,
+        MultiArrayView<2, size_t> & indices
+) const {
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "RandomForest0::leaf_indices(): Wrong feature type.");
 
+    vigra_precondition(indices.shape() == Shape2(features.num_instances(), dtrees_.size()),
+                       "RandomForest0::leaf_indices(): Shape mismatch.");
 
-
+    for (size_t i = 0; i < dtrees_.size(); ++i)
+    {
+        auto sub = indices.bind<1>(i);
+        dtrees_[i].leaf_ids(features, sub);
+    }
 }
 
 
@@ -998,6 +1053,25 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         weights_(i, label) = 1;
         weights_(i, 1-label) = 0;
     }
+
+    // Get the leaf nodes of the training instances.
+    MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());
+    rf_.leaf_ids(features, leaf_ids);
+
+    // Create the index vectors for the SVM.
+    // The SVM will multiply the weights (double) with the index vectors, that's why the index vectors are double, too.
+    MultiArray<2, double> index_vectors(Shape2(features.num_instances(), rf_adaptor_.numLeaves()), 0.);
+    for (size_t i = 0; i < features.num_instances(); ++i)
+    {
+        for (size_t j = 0; j < rf_.num_trees(); ++j)
+        {
+            TreeNode tree_node(leaf_ids(i, j));
+            Node node = rf_adaptor_.tree_to_forest(j, tree_node);
+            size_t node_index = rf_adaptor_.getLeafIndex(node);
+            index_vectors(i, node_index) = 1.;
+        }
+    }
+
 
     // TODO: Train SVM.
 
