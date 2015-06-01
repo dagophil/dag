@@ -41,8 +41,31 @@ void load_data(
     tmp_test_y.reshape(Shape1(info.shape().begin()));
     readHDF5(info, tmp_test_y);
 
-    vigra_assert(tmp_train_x.shape()[0] == tmp_train_y.size(), "Wrong number of training instances.");
-    vigra_assert(tmp_test_x.shape()[0] == tmp_test_y.size(), "Wrong number of test instances.");
+    if (tmp_train_x.shape()[0] == tmp_train_y.size())
+    {}
+    else if (tmp_train_x.shape()[1] == tmp_train_y.size())
+    {
+        auto tmp_view = tmp_train_x.transpose();
+        MultiArray<2, S> tmp_copy = tmp_view;
+        tmp_train_x = tmp_copy;
+    }
+    else
+    {
+        vigra_fail("Wrong number of training instances.");
+    }
+
+    if (tmp_test_x.shape()[0] == tmp_test_y.size())
+    {}
+    else if (tmp_test_x.shape()[1] == tmp_test_y.size())
+    {
+        auto tmp_view = tmp_test_x.transpose();
+        MultiArray<2, S> tmp_copy = tmp_view;
+        tmp_test_x = tmp_copy;
+    }
+    else
+    {
+        vigra_fail("Wrong number of test instances.");
+    }
 
     if (labels.size() == 0)
     {

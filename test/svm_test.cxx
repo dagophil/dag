@@ -7,16 +7,19 @@ void test_svm()
 {
     using namespace vigra;
 
-    typedef float FeatureType;
-    typedef UInt8 LabelType;
-
     std::cout << "called test_svm()" << std::endl;
 
     {
+        typedef double FeatureType;
+        typedef UInt8 LabelType;
+
         // Load the data.
-        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
-        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
-        std::vector<LabelType> labels = {3, 8};
+//        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+//        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+//        std::vector<LabelType> labels = {3, 8};
+        std::string train_filename = "/home/philip/data/liblinear/susy_float64_train.h5";
+        std::string test_filename = "/home/philip/data/liblinear/susy_float64_test.h5";
+        std::vector<LabelType> labels = {0, 1};
         MultiArray<2, FeatureType> train_x;
         MultiArray<1, LabelType> train_y;
         MultiArray<2, FeatureType> test_x;
@@ -25,7 +28,7 @@ void test_svm()
 
         // Train a SVM.
         TwoClassSVM<FeatureType, LabelType> svm;
-        svm.train(train_x, train_y, 100000);
+        svm.train(train_x, train_y);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());
