@@ -111,6 +111,7 @@ public:
     typedef T value_type;
     typedef value_type & reference;
     typedef value_type const & const_reference;
+    typedef typename MultiArrayView<2, T>::difference_type difference_type;
 
     FeatureGetter(MultiArrayView<2, T> const & arr)
         : arr_(arr)
@@ -138,6 +139,12 @@ public:
     MultiArrayView<1, T> const get_features(size_t i) const
     {
         return arr_.template bind<1>(i);
+    }
+
+    /// \brief Return the shape of the underlying multi array.
+    difference_type const & shape() const
+    {
+        return arr_.shape();
     }
 
     /// \brief Return the number of instances.
@@ -235,7 +242,7 @@ public:
         return arr_.end();
     }
 
-    const difference_type & shape() const
+    difference_type const & shape() const
     {
         return arr_.shape();
     }
@@ -792,6 +799,13 @@ public:
             MultiArrayView<2, size_t> & indices
     ) const;
 
+    /// \brief Transform the given external labels to the labels that are used internally.
+    template <typename LABELS>
+    void transform_external_labels(
+            LABELS const & labels_in,
+            MultiArrayView<1, size_t> & labels_out
+    ) const;
+
 protected:
 
     /// \brief The trees of the forest.
@@ -800,6 +814,7 @@ protected:
     /// \brief The distinct labels that were found in training.
     std::vector<LabelType> distinct_labels_;
 
+    /// \brief The random engine.
     RANDENGINE const & randengine_;
 
 };
@@ -826,16 +841,8 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     std::copy(dlabels.begin(), dlabels.end(), distinct_labels_.begin());
 
     // Translate the labels to the label ids.
-    std::map<FeatureType, size_t> label_id;
-    for (size_t i = 0; i < distinct_labels_.size(); ++i)
-    {
-        label_id[distinct_labels_[i]] = i;
-    }
     MultiArray<1, size_t> data_y_id_arr(data_y.shape());
-    for (size_t i = 0; i < data_y_id_arr.size(); ++i)
-    {
-        data_y_id_arr[i] = label_id[data_y[i]]; // TODO: Maybe use () operator instead of [] operator.
-    }
+    transform_external_labels(data_y, data_y_id_arr);
     LabelGetter<size_t> data_y_id(data_y_id_arr); // TODO: What if LABELS is specialized?
 
     // Create a named lambda to train a single tree with index i.
@@ -950,8 +957,6 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     }
 }
 
-
-/// \brief For each tree return the indices of the leaf (leaves) that contain the given instances.
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES>
 void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
@@ -968,6 +973,29 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
     {
         auto sub = indices.bind<1>(i);
         dtrees_[i].leaf_ids(features, sub);
+    }
+}
+
+template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
+template <typename LABELS>
+void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::transform_external_labels(
+        LABELS const & labels_in,
+        MultiArrayView<1, size_t> & labels_out
+) const {
+    static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
+                  "RandomForest0::transform_external_labels(): Wrong label type.");
+
+    vigra_precondition(labels_in.size() == labels_out.size(),
+                       "RandomForest0::transform_external_labels(): Shape mismatch.");
+
+    std::map<FeatureType, size_t> label_id;
+    for (size_t i = 0; i < distinct_labels_.size(); ++i)
+    {
+        label_id[distinct_labels_[i]] = i;
+    }
+    for (size_t i = 0; i < labels_in.size(); ++i)
+    {
+        labels_out[i] = label_id[labels_in[i]]; // TODO: Maybe use () operator instead of [] operator.
     }
 }
 
@@ -1058,7 +1086,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());
     rf_.leaf_ids(features, leaf_ids);
 
-    // Create the index vectors for the SVM.
+    // Create the index vectors (= features) for the SVM.
     // The SVM will multiply the weights (double) with the index vectors, that's why the index vectors are double, too.
     MultiArray<2, double> index_vectors(Shape2(features.num_instances(), rf_adaptor_.numLeaves()), 0.);
     for (size_t i = 0; i < features.num_instances(); ++i)
@@ -1072,15 +1100,13 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         }
     }
 
-
-    // TODO: Train SVM.
-
-
-
-
-
-
-    std::cout << "Done training globally refined RF" << std::endl;
+    // Train the SVM.
+    FeatureGetter<double> svm_feats(index_vectors);
+    MultiArray<1, size_t> svm_labels_arr(labels.size());
+    rf_.transform_external_labels(labels, svm_labels_arr);
+    LabelGetter<size_t> svm_labels(svm_labels_arr);
+//    LibLinearSVM svm;
+//    svm.fit(svm_feats, svm_labels, weights_);
 }
 
 
