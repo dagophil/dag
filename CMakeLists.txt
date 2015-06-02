@@ -9,7 +9,7 @@ file(GLOB HEADERS "include/vigra/*.hxx")
 add_custom_target(dag SOURCES ${HEADERS})
 
 # C++11
-set(CMAKE_CXX_FLAGS "-std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 # VIGRA
 find_package(VIGRA REQUIRED)

@@ -13,13 +13,58 @@ void test_svm()
         typedef double FeatureType;
         typedef UInt8 LabelType;
 
+        std::vector<FeatureType> train_data_x {
+            9,  9, 11,  12, 12,
+            2, -1,  0.5, 2, -1
+        };
+        MultiArray<2, FeatureType> train_x(Shape2(5, 2));
+        for (size_t i = 0; i < train_data_x.size(); ++i)
+            train_x[i] = train_data_x[i];
+
+        std::vector<LabelType> train_data_y {
+            0, 0, 0, 1, 1
+        };
+        MultiArray<1, LabelType> train_y(train_data_y.size());
+        for (size_t i = 0; i < train_data_y.size(); ++i)
+            train_y[i] = train_data_y[i];
+
+        TwoClassSVM<FeatureType, LabelType> svm;
+        svm.train(train_x, train_y);
+
+
+        std::vector<FeatureType> test_data_x {
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0,  0,  0,  0,  0
+        };
+        MultiArray<2, FeatureType> test_x(Shape2(15, 2));
+        for (size_t i = 0; i < test_data_x.size(); ++i)
+            test_x[i] = test_data_x[i];
+
+        MultiArray<1, LabelType> pred_y(15);
+        svm.predict(test_x, pred_y);
+
+        std::cout << "pred: ";
+        for (size_t i = 0; i < pred_y.size(); ++i)
+            std::cout << (int) pred_y(i) << ", ";
+        std::cout << std::endl;
+
+
+
+    }
+
+
+
+    {
+        typedef double FeatureType;
+        typedef UInt8 LabelType;
+
         // Load the data.
-//        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
-//        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
-//        std::vector<LabelType> labels = {3, 8};
-        std::string train_filename = "/home/philip/data/liblinear/susy_float64_train.h5";
-        std::string test_filename = "/home/philip/data/liblinear/susy_float64_test.h5";
+        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
         std::vector<LabelType> labels = {0, 1};
+//        std::string train_filename = "/home/philip/data/liblinear/susy_float64_train.h5";
+//        std::string test_filename = "/home/philip/data/liblinear/susy_float64_test.h5";
+//        std::vector<LabelType> labels = {0, 1};
         MultiArray<2, FeatureType> train_x;
         MultiArray<1, LabelType> train_y;
         MultiArray<2, FeatureType> test_x;
