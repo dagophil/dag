@@ -118,6 +118,9 @@ protected:
     /// \brief The labels that were found in training.
     std::vector<LabelType> distinct_labels_;
 
+    /// \brief The alpha vector that is computed in training.
+    MultiArray<1, double> alpha_;
+
     /// \brief The beta vector that is computed in training.
     MultiArray<1, double> beta_;
 
@@ -181,7 +184,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     }
 
     // Initialize the alphas and betas with 0 and do the SVM loop.
-    auto alpha = MultiArray<1, double>(Shape1(num_instances), 0.);
+    alpha_.reshape(Shape1(num_instances), 0.);
     beta_.reshape(Shape1(num_features), 0.);
     auto indices = std::vector<size_t>(num_instances);
     std::iota(indices.begin(), indices.end(), 0);
@@ -203,26 +206,26 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
             auto const grad = label_ids(i) * v - 1;
 
             // Update alpha
-            auto old_alpha = alpha(i);
-            alpha(i) = std::max(0., std::min(U, alpha(i) - grad/x_squ(i)));
+            auto old_alpha = alpha_(i);
+            alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
 
             // Update beta.
             for (size_t j = 0; j < num_features; ++j)
             {
-                beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha(i) - old_alpha);
+                beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha_(i) - old_alpha);
             }
 
             // Compute the projected gradient (for the stopping criteria).
             auto proj_grad = grad;
-            if (alpha(i) <= 0)
+            if (alpha_(i) <= 0)
                 proj_grad = std::min(grad, 0.);
-            else if (alpha(i) >= U)
+            else if (alpha_(i) >= U)
                 proj_grad = std::max(grad, 0.);
             min_grad = std::min(min_grad, proj_grad);
             max_grad = std::max(max_grad, proj_grad);
 
             // Update the stopping criteria.
-            if (std::abs(alpha(i) - old_alpha) > stop.alpha_tol_)
+            if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
             {
                 ++diff_count;
             }
