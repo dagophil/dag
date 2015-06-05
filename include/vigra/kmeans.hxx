@@ -12,13 +12,16 @@ namespace vigra
 namespace detail
 {
     /// \brief Class that acts like a multi array view, but restricts the access to arr to the given lines.
-    template <typename S>
-    class MultiArrayLineView
+    template <typename ARRAY>
+    class LineView
     {
     public:
 
-        MultiArrayLineView(
-                MultiArrayView<2, S> const & arr,
+        typedef ARRAY Array;
+        typedef typename Array::value_type value_type;
+
+        LineView(
+                Array const & arr,
                 std::vector<size_t> const & lines
         )   : arr_(arr),
               lines_(lines),
@@ -30,14 +33,14 @@ namespace detail
             return shape_;
         }
 
-        S const & operator()(size_t i, size_t j) const
+        value_type const & operator()(size_t i, size_t j) const
         {
             return arr_(lines_[i], j);
         }
 
     protected:
 
-        MultiArrayView<2, S> const & arr_;
+        Array const & arr_;
         std::vector<size_t> const lines_;
         Shape2 shape_;
     };
@@ -71,9 +74,9 @@ struct KMeansStoppingCriteria
 /// \param stop: the stopping criteria
 /// \param considered_instances: only consider these instances when computing the clusters (if empty: take all instances)
 /// \param randengine: the random engine
-template <typename S, typename RANDENGINE = MersenneTwister>
+template <typename FEATURES, typename RANDENGINE = MersenneTwister>
 void kmeans(
-        MultiArrayView<2, S> const & points,
+        FEATURES const & points,
         size_t const k,
         std::vector<size_t> & instance_clusters,
         KMeansStoppingCriteria const & stop = KMeansStoppingCriteria(),
@@ -90,7 +93,7 @@ void kmeans(
         considered_instances.resize(points.shape()[0]);
         std::iota(considered_instances.begin(), considered_instances.end(), 0);
     }
-    detail::MultiArrayLineView<S> const points_sub(points, considered_instances);
+    detail::LineView<FEATURES> const points_sub(points, considered_instances);
     size_t const num_instances = points_sub.shape()[0];
     size_t const num_features = points_sub.shape()[1];
 
