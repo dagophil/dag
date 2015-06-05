@@ -64,7 +64,7 @@ void test_svm()
     }
 
     {
-        std::cout << "SVM on MNIST 3 vs 8" << std::endl;
+        std::cout << "SVM on MNIST 5 vs 8" << std::endl;
 
         typedef double FeatureType;
         typedef UInt8 LabelType;

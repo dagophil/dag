@@ -110,11 +110,18 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
                   "TwoClassSVM::train(): Wrong label type.");
 
-    double const U = 1.0; // TODO: Make this a parameter.
     size_t const num_instances = features.shape()[0];
     size_t num_features = features.shape()[1];
-    double const tol = 0.0001;
-    B_ = 1.5; // value of the bias feature
+
+    double const U = 1.0; // TODO: Make this a parameter.
+    B_ = 1.5; // value of the bias feature, TODO: Make this a parameter.
+
+    // stopping criterion: alpha difference
+    double const alpha_tol = 0.0001;
+    size_t const max_diffs = 0;
+
+    // stopping criterion: gradient difference
+    double const grad_tol = 0.0001;
 
     // Find the distinct labels.
     auto dlabels = std::set<LabelType>(labels.begin(), labels.end());
@@ -155,6 +162,8 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     {
         std::random_shuffle(indices.begin(), indices.end(), rand_int);
         size_t diff_count = 0;
+        double min_grad = std::numeric_limits<double>::max();
+        double max_grad = std::numeric_limits<double>::lowest();
         for (size_t i : indices)
         {
             // Compute the scalar products v = x_i * beta.
@@ -164,22 +173,32 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
                 v += normalized_features(i, j) * beta_(j);
             }
 
-            // Update alpha.
-            auto gamma = label_ids(i) * v - 1;
+            // Find the gradient.
+            auto grad = label_ids(i) * v - 1;
+
+            // Find the projected gradient (for the stopping criteria).
+            auto proj_grad = grad;
+            if (alpha(i) <= 0)
+                proj_grad = std::min(grad, 0.);
+            else if (alpha(i) >= U)
+                proj_grad = std::max(grad, 0.);
+            min_grad = std::min(min_grad, proj_grad);
+            max_grad = std::max(max_grad, proj_grad);
+
+            // Update alpha
             auto old_alpha = alpha(i);
-            alpha(i) = std::max(0., std::min(U, alpha(i) - gamma/x_squ(i)));
+            alpha(i) = std::max(0., std::min(U, alpha(i) - grad/x_squ(i)));
 
             // Update beta.
-            if (std::abs(alpha(i) - old_alpha) > tol)
+            for (size_t j = 0; j < num_features; ++j)
             {
-                ++diff_count;
-                for (size_t j = 0; j < num_features; ++j)
-                {
-                    beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha(i) - old_alpha);
-                }
+                beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha(i) - old_alpha);
             }
 
-
+            if (std::abs(alpha(i) - old_alpha) > alpha_tol)
+            {
+                ++diff_count;
+            }
             ++t;
             if (t >= max_t)
             {
@@ -187,9 +206,13 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
             }
         }
 
-        std::cout << "diffs: " << diff_count << std::endl;
-//        if (1000*diff_count < num_instances)
-        if (diff_count < 1000)
+        // TODO: Remove output.
+        std::cout << "min: " << min_grad << ", max: " << max_grad << ", diffs: " << diff_count << std::endl;
+        if (max_grad - min_grad < grad_tol)
+        {
+            break;
+        }
+        if (diff_count <= max_diffs)
         {
             break;
         }
