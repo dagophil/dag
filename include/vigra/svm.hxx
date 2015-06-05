@@ -27,8 +27,7 @@ public:
 
     struct StoppingCriteria
     {
-    public:
-        StoppingCriteria(
+        explicit StoppingCriteria(
                 double const alpha_tol = 0.0001,
                 size_t const max_total_diffs = 0,
                 double const max_relative_diffs = 0.,
@@ -78,7 +77,7 @@ public:
 
     /// \brief Predict with the SVM.
     /// \param features: the features
-    /// \param[out] labels: the predicted labels
+    /// \param labels[out]: the predicted labels
     template <typename FEATURES, typename LABELS>
     void predict(
             FEATURES const & features,
@@ -87,7 +86,7 @@ public:
 
     /// \brief Transform the labels to +1 and -1.
     /// \param labels_in: the labels that should be transformed
-    /// \param[out] labels_out: the transformed labels
+    /// \param labels_out[out]: the transformed labels
     template <typename LABELS>
     void transform_external_labels(
             LABELS const & labels_in,
@@ -105,7 +104,7 @@ protected:
 
     /// \brief Apply the current normalization on the given features and add the bias feature.
     /// \param features_in: the features that shall be normalized
-    /// \param[out] features_out: the normalized features
+    /// \param features_out[out]: the normalized features
     template <typename FEATURES>
     void apply_normalization(
             FEATURES const & features_in,

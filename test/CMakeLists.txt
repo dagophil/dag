@@ -23,3 +23,7 @@ target_link_libraries(svm_test
     ${VIGRA_IMPEX_LIBRARY}
     ${HDF5_LIBRARIES}
 )
+
+add_executable(kmeans_test
+    kmeans_test.cxx
+)
