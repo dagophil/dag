@@ -10,7 +10,7 @@ void test_svm()
     std::cout << "called test_svm()" << std::endl;
 
     {
-        std::cout << "SVM on toy data" << std::endl;
+        std::cout << "Running SVM on toy data" << std::endl;
 
         typedef double FeatureType;
         typedef UInt8 LabelType;
@@ -64,10 +64,11 @@ void test_svm()
     }
 
     {
-        std::cout << "SVM on MNIST 5 vs 8" << std::endl;
+        std::cout << "Running SVM on MNIST 5 vs 8" << std::endl;
 
         typedef double FeatureType;
         typedef UInt8 LabelType;
+        typedef TwoClassSVM<FeatureType, LabelType> SVM;
 
         // Load the data.
         std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
@@ -80,8 +81,10 @@ void test_svm()
         load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
 
         // Train a SVM.
-        TwoClassSVM<FeatureType, LabelType> svm;
-        svm.train(train_x, train_y);
+        SVM::StoppingCriteria stop;
+        stop.max_relative_diffs_ = 0.01;
+        SVM svm;
+        svm.train(train_x, train_y, 1.0, 1.5, stop);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());

@@ -51,6 +51,38 @@ public:
     typedef LABELTYPE LabelType;
     typedef RANDENGINE RandEngine;
 
+    struct StoppingCriteria
+    {
+    public:
+        StoppingCriteria(
+                double const alpha_tol = 0.0001,
+                size_t const max_total_diffs = 0,
+                double const max_relative_diffs = 0.,
+                double const grad_tol = 0.0001,
+                size_t const max_t = std::numeric_limits<size_t>::max()
+        )   : alpha_tol_(alpha_tol),
+              max_total_diffs_(max_total_diffs),
+              max_relative_diffs_(max_relative_diffs),
+              grad_tol_(grad_tol),
+              max_t_(max_t)
+        {
+            vigra_precondition(0. <= max_relative_diffs_ && max_relative_diffs_ <= 1.,
+                               "StoppingCriteria(): The relative number of differences must be in the interval [0, 1].");
+        }
+
+        // count the number of alpha updates that were greater than (or equal to) alpha_tol and
+        // stop if count <= max_total_diffs or count <= num_instances*max_relative_diffs
+        double alpha_tol_ = 0.0001;
+        size_t max_total_diffs_ = 0;
+        double max_relative_diffs_ = 0.;
+
+        // stop if the maximum difference of gradients is less than grad_tol
+        double grad_tol_ = 0.0001;
+
+        // maximum number of iterations
+        size_t max_t_ = std::numeric_limits<size_t>::max();
+    };
+
     TwoClassSVM(RandEngine const & randengine = RandEngine::global())
         : randengine_(randengine)
     {}
@@ -59,7 +91,9 @@ public:
     void train(
             FEATURES const & features,
             LABELS const & labels,
-            size_t const max_t = std::numeric_limits<size_t>::max()
+            double const U = 1.0,
+            double const B = 1.5,
+            StoppingCriteria const & stop = StoppingCriteria()
     );
 
     template <typename FEATURES, typename LABELS>
@@ -103,7 +137,9 @@ template <typename FEATURES, typename LABELS>
 void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         FEATURES const & features,
         LABELS const & labels,
-        size_t const max_t
+        double const U,
+        double const B,
+        StoppingCriteria const & stop
 ){
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "TwoClassSVM::train(): Wrong feature type.");
@@ -113,15 +149,8 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     size_t const num_instances = features.shape()[0];
     size_t num_features = features.shape()[1];
 
-    double const U = 1.0; // TODO: Make this a parameter.
-    B_ = 1.5; // value of the bias feature, TODO: Make this a parameter.
-
-    // stopping criterion: alpha difference
-    double const alpha_tol = 0.0001;
-    size_t const max_diffs = 0;
-
-    // stopping criterion: gradient difference
-    double const grad_tol = 0.0001;
+    // Save the bias feature.
+    B_ = B;
 
     // Find the distinct labels.
     auto dlabels = std::set<LabelType>(labels.begin(), labels.end());
@@ -158,7 +187,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     auto indices = std::vector<size_t>(num_instances);
     std::iota(indices.begin(), indices.end(), 0);
     auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
-    for (size_t t = 0; t < max_t;)
+    for (size_t t = 0; t < stop.max_t_;)
     {
         std::random_shuffle(indices.begin(), indices.end(), rand_int);
         size_t diff_count = 0;
@@ -195,24 +224,20 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
                 beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha(i) - old_alpha);
             }
 
-            if (std::abs(alpha(i) - old_alpha) > alpha_tol)
+            if (std::abs(alpha(i) - old_alpha) > stop.alpha_tol_)
             {
                 ++diff_count;
             }
             ++t;
-            if (t >= max_t)
+            if (t >= stop.max_t_)
             {
                 break;
             }
         }
 
-        // TODO: Remove output.
-        std::cout << "min: " << min_grad << ", max: " << max_grad << ", diffs: " << diff_count << std::endl;
-        if (max_grad - min_grad < grad_tol)
-        {
-            break;
-        }
-        if (diff_count <= max_diffs)
+        if (max_grad - min_grad < stop.grad_tol_ ||
+                diff_count <= stop.max_total_diffs_ ||
+                diff_count <= stop.max_relative_diffs_ * num_instances)
         {
             break;
         }
