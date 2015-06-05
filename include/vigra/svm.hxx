@@ -497,18 +497,34 @@ void ClusteredTwoClassSVM<SVM>::train(
         std::vector<size_t> instance_clusters;
         KMeansStoppingCriteria stop;
         kmeans(features, num_clusters, instance_clusters, stop, sample_indices);
+        vigra_assert(instance_clusters.size() == num_instances,
+                     "ClusteredTwoClassSVM::train(): The kmeans algorithm produced the wrong number of instances.");
+
+        // Create the sub views on the instances.
+        std::vector<std::vector<size_t> > sub_instance_indices(num_clusters);
+        for (size_t i = 0; i < num_instances; ++i)
+        {
+            sub_instance_indices[instance_clusters[i]].push_back(i);
+        }
+        std::vector<detail::LineView<FEATURES> > sub_features;
+        for (size_t c = 0; c < num_clusters; ++c)
+        {
+            sub_features.push_back(detail::LineView<FEATURES>(features, sub_instance_indices[c]));
+        }
+
+        // TODO: Run the SVMs on the sub problem.
+
+
+
+
+
+
+
 
 
         std::cout << "done" << std::endl;
         std::exit(0);
-
-
     }
-
-
-
-
-
 }
 
 
