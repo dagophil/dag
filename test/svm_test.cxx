@@ -47,9 +47,11 @@ void test_svm()
         for (size_t i = 0; i < test_data_y.size(); ++i)
             test_y[i] = test_data_y[i];
 
-        // Train and predict with the SVM.
+        // Train the SVM.
         TwoClassSVM<FeatureType, LabelType> svm;
         svm.train(train_x, train_y);
+
+        // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(15);
         svm.predict(test_x, pred_y);
 
@@ -103,8 +105,54 @@ void test_svm()
     std::cout << "finished test_svm()" << std::endl;
 }
 
+void test_clustered_svm()
+{
+    using namespace vigra;
+
+    {
+        std::cout << "Running clustered SVM on MNIST 5 vs 8" << std::endl;
+
+        typedef double FeatureType;
+        typedef UInt8 LabelType;
+        typedef TwoClassSVM<FeatureType, LabelType> RegularSVM;
+        typedef ClusteredTwoClassSVM<RegularSVM> SVM;
+
+        // Load the data.
+        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+        std::vector<LabelType> labels = {5, 8};
+        MultiArray<2, FeatureType> train_x;
+        MultiArray<1, LabelType> train_y;
+        MultiArray<2, FeatureType> test_x;
+        MultiArray<1, LabelType> test_y;
+        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
+
+        // Train a SVM.
+        SVM::StoppingCriteria stop;
+        stop.max_relative_diffs_ = 0.01;
+        SVM svm(5, 4, 2000);
+        svm.train(train_x, train_y, 1.0, 1.5, stop);
+
+        // Predict with the SVM.
+        MultiArray<1, LabelType> pred_y(test_y.shape());
+//        svm.predict(test_x, pred_y);
+
+//        // Count the correct predicted instances.
+//        size_t count = 0;
+//        for (size_t i = 0; i < test_y.size(); ++i)
+//        {
+//            if (pred_y(i) == test_y(i))
+//                ++count;
+//        }
+//        std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+    }
+
+    std::cout << "finished test_clustered_svm()" << std::endl;
+}
+
 
 int main()
 {
-    test_svm();
+//    test_svm();
+    test_clustered_svm();
 }

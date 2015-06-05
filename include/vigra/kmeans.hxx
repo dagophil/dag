@@ -9,6 +9,42 @@ namespace vigra
 
 
 
+namespace detail
+{
+    /// \brief Class that acts like a multi array view, but restricts the access to arr to the given lines.
+    template <typename S>
+    class MultiArrayLineView
+    {
+    public:
+
+        MultiArrayLineView(
+                MultiArrayView<2, S> const & arr,
+                std::vector<size_t> const & lines
+        )   : arr_(arr),
+              lines_(lines),
+              shape_(lines.size(), arr.shape()[1])
+        {}
+
+        Shape2 const & shape() const
+        {
+            return shape_;
+        }
+
+        S const & operator()(size_t i, size_t j) const
+        {
+            return arr_(lines_[i], j);
+        }
+
+    protected:
+
+        MultiArrayView<2, S> const & arr_;
+        std::vector<size_t> const lines_;
+        Shape2 shape_;
+    };
+}
+
+
+
 struct KMeansStoppingCriteria
 {
     explicit KMeansStoppingCriteria(
@@ -33,32 +69,43 @@ struct KMeansStoppingCriteria
 /// \param k: number of clusters
 /// \param instance_clusters[out]: the cluster id of each instance
 /// \param stop: the stopping criteria
-template <typename S>
+/// \param considered_instances: only consider these instances when computing the clusters (if empty: take all instances)
+/// \param randengine: the random engine
+template <typename S, typename RANDENGINE = MersenneTwister>
 void kmeans(
         MultiArrayView<2, S> const & points,
         size_t const k,
         std::vector<size_t> & instance_clusters,
-        KMeansStoppingCriteria const & stop = KMeansStoppingCriteria()
+        KMeansStoppingCriteria const & stop = KMeansStoppingCriteria(),
+        std::vector<size_t> considered_instances = std::vector<size_t>(),
+        RANDENGINE const & randengine = RANDENGINE::global()
 ){
     vigra_precondition(k > 0, "kmeans(): k must not be negative.");
 
-    size_t const num_instances = points.shape()[0];
-    size_t const num_features = points.shape()[1];
-
-    instance_clusters.resize(num_instances);
-    MultiArray<2, double> clusters(Shape2(k, num_features));
+    // Create the view on the considered instances.
+    bool reassign = true;
+    if (considered_instances.empty())
+    {
+        reassign = false;
+        considered_instances.resize(points.shape()[0]);
+        std::iota(considered_instances.begin(), considered_instances.end(), 0);
+    }
+    detail::MultiArrayLineView<S> const points_sub(points, considered_instances);
+    size_t const num_instances = points_sub.shape()[0];
+    size_t const num_features = points_sub.shape()[1];
 
     // Find the initial clustering (use the instance_clusters vector, so no additional space is required).
-    UniformIntRandomFunctor<MersenneTwister> rand;
+    instance_clusters.resize(num_instances);
+    MultiArray<2, double> clusters(Shape2(k, num_features));
+    UniformIntRandomFunctor<MersenneTwister> rand(randengine);
     std::iota(instance_clusters.begin(), instance_clusters.end(), 0);
     for (size_t c = 0; c < k; ++c)
     {
         size_t const ii = c+rand(num_instances-c);
         std::swap(instance_clusters[c], instance_clusters[ii]);
-
         for (size_t j = 0; j < num_features; ++j)
         {
-            clusters(c, j) = points(instance_clusters[c], j);
+            clusters(c, j) = points_sub(instance_clusters[c], j);
         }
     }
 
@@ -88,7 +135,7 @@ void kmeans(
                 double distance = 0.;
                 for (size_t j = 0; j < num_features; ++j)
                 {
-                    double v = points(i, j) - clusters(c, j);
+                    double v = points_sub(i, j) - clusters(c, j);
                     distance += v*v;
                 }
                 if (distance < best_distance)
@@ -123,7 +170,7 @@ void kmeans(
             size_t const c = instance_clusters[i];
             for (size_t j = 0; j < num_features; ++j)
             {
-                clusters(c, j) += points(i, j);
+                clusters(c, j) += points_sub(i, j);
             }
         }
         for (size_t c = 0; c < k; ++c)
@@ -131,6 +178,30 @@ void kmeans(
             for (size_t j = 0; j < num_features; ++j)
             {
                 clusters(c, j) /= static_cast<double>(instance_count[c]);
+            }
+        }
+    }
+
+    // If only a subsample of the instances was used to find the cluster centers, assign the clusters to the whole set of instances.
+    if (reassign)
+    {
+        instance_clusters.resize(points.shape()[0]);
+        for (size_t i = 0; i < points.shape()[0]; ++i)
+        {
+            double best_distance = std::numeric_limits<double>::max();
+            for (size_t c = 0; c < k; ++c)
+            {
+                double distance = 0.;
+                for (size_t j = 0; j < num_features; ++j)
+                {
+                    double v = points(i, j) - clusters(c, j);
+                    distance += v*v;
+                }
+                if (distance < best_distance)
+                {
+                    best_distance = distance;
+                    instance_clusters[i] = c;
+                }
             }
         }
     }

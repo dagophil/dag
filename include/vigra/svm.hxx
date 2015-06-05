@@ -8,6 +8,8 @@
 #include <vigra/multi_array.hxx>
 #include <vigra/random.hxx>
 
+#include <vigra/kmeans.hxx>
+
 
 
 namespace vigra
@@ -15,7 +17,7 @@ namespace vigra
 
 
 
-/// \brief Two class support vector machine using hinge loss and a quadratic regularizer (implemented with "dual coordinate descent" [Hsieh et al. 2008])
+/// \brief Two class support vector machine using hinge loss and a quadratic regularizer (implemented with "dual coordinate descent" [Hsieh et al. 2008]).
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE = MersenneTwister>
 class TwoClassSVM
 {
@@ -92,6 +94,12 @@ public:
             LABELS const & labels_in,
             MultiArrayView<1, int> & labels_out
     ) const;
+
+    /// \brief Getter for the alpha vector.
+    MultiArray<1, double> const & alpha() const
+    {
+        return alpha_;
+    }
 
 protected:
 
@@ -366,6 +374,141 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::apply_normalization(
     {
         features_out(i, num_features) = B_;
     }
+}
+
+
+
+/// \brief Divide and Conquer SVM [Hsieh et al. 2014].
+template <typename SVM>
+class ClusteredTwoClassSVM
+{
+public:
+
+    typedef typename SVM::FeatureType FeatureType;
+    typedef typename SVM::LabelType LabelType;
+    typedef typename SVM::RandEngine RandEngine;
+    typedef typename SVM::StoppingCriteria StoppingCriteria;
+
+    ClusteredTwoClassSVM(
+            size_t const rounds,
+            size_t const k,
+            size_t const num_clustering_samples,
+            RandEngine const & randengine = RandEngine::global()
+    )   : rounds_(rounds),
+          k_(k),
+          num_clustering_samples_(num_clustering_samples),
+          randengine_(randengine)
+    {}
+
+    /// \brief Train the SVM.
+    /// \param features: the features
+    /// \param labels: the labels
+    /// \param U: upper bound for alpha
+    /// \param B: value of the bias feature (added after normalization)
+    /// \param stop: the stopping criteria
+    template <typename FEATURES, typename LABELS>
+    void train(
+            FEATURES const & features,
+            LABELS const & labels,
+            double const U = 1.0,
+            double const B = 1.5,
+            StoppingCriteria const & stop = StoppingCriteria()
+    );
+
+//    /// \brief Predict with the SVM.
+//    /// \param features: the features
+//    /// \param labels[out]: the predicted labels
+//    template <typename FEATURES, typename LABELS>
+//    void predict(
+//            FEATURES const & features,
+//            LABELS & labels
+//    ) const;
+
+protected:
+
+    /// \brief Number of rounds.
+    size_t const rounds_;
+
+    /// \brief Use k^(rounds-1-i) clusters in round i.
+    size_t const k_;
+
+    /// \brief Number of instances that are used to compute the clusters.
+    size_t const num_clustering_samples_;
+
+    /// \brief The random engine.
+    RandEngine const & randengine_;
+
+    /// \brief The alpha vector that is computed in training.
+    MultiArray<1, double> alpha_;
+
+    /// \brief The beta vector that is computed in training.
+    MultiArray<1, double> beta_;
+};
+
+template <typename SVM>
+template <typename FEATURES, typename LABELS>
+void ClusteredTwoClassSVM<SVM>::train(
+        FEATURES const & features,
+        LABELS const & labels,
+        double const U,
+        double const B,
+        StoppingCriteria const & stop
+){
+    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
+                  "ClusteredTwoClassSVM::train(): Wrong feature type.");
+    static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
+                  "ClusteredTwoClassSVM::train(): Wrong label type.");
+
+    size_t const num_instances = features.shape()[0];
+    size_t const num_features = features.shape()[1];
+
+    for (size_t l = 0; l+1 < rounds_; ++l)
+    {
+        size_t const num_clusters = std::pow(k_, rounds_ - 1 - l);
+
+        // Draw a random sample of the instances for the clustering.
+        UniformIntRandomFunctor<MersenneTwister> rand(randengine_);
+        std::vector<size_t> sample_indices;
+        if (l == 0)
+        {
+            // Consider all instances.
+            sample_indices.resize(num_instances);
+            std::iota(sample_indices.begin(), sample_indices.end(), 0);
+        }
+        else
+        {
+            // Consider all instances with alpha > 0.
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                if (alpha_(i) > 0)
+                {
+                    sample_indices.push_back(i);
+                }
+            }
+        }
+        for (size_t i = 0; i < num_clustering_samples_; ++i)
+        {
+            size_t ii = i+rand(sample_indices.size()-i);
+            std::swap(sample_indices[i], sample_indices[ii]);
+        }
+        sample_indices.resize(num_clustering_samples_);
+
+        // Do the clustering.
+        std::vector<size_t> instance_clusters;
+        KMeansStoppingCriteria stop;
+        kmeans(features, num_clusters, instance_clusters, stop, sample_indices);
+
+
+        std::cout << "done" << std::endl;
+        std::exit(0);
+
+
+    }
+
+
+
+
+
 }
 
 
