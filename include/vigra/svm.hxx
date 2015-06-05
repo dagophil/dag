@@ -15,32 +15,6 @@ namespace vigra
 
 
 
-//namespace detail
-//{
-//    /// \brief Compute the dot product of the given instances.
-//    template <typename FEATURES>
-//    class DotProductEvaluater
-//    {
-//    public:
-//        typedef FEATURES Features;
-//        DotProductEvaluater(Features const & features)
-//            : features_(features)
-//        {}
-//        double operator()(size_t i, size_t j) const
-//        {
-//            double v = 0;
-//            for (size_t k = 0; k < features_.shape()[1]; ++k)
-//            {
-//                v += features_(i, k) * features_(j, k);
-//            }
-//        }
-//    protected:
-//        Features const & features_;
-//    };
-//}
-
-
-
 /// \brief Two class support vector machine using hinge loss and a quadratic regularizer (implemented with "dual coordinate descent" [Hsieh et al. 2008])
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE = MersenneTwister>
 class TwoClassSVM
@@ -87,6 +61,12 @@ public:
         : randengine_(randengine)
     {}
 
+    /// \brief Train the SVM.
+    /// \param features: the features
+    /// \param labels: the labels
+    /// \param U: upper bound for alpha
+    /// \param B: value of the bias feature (added after normalization)
+    /// \param stop: the stopping criteria
     template <typename FEATURES, typename LABELS>
     void train(
             FEATURES const & features,
@@ -96,6 +76,9 @@ public:
             StoppingCriteria const & stop = StoppingCriteria()
     );
 
+    /// \brief Predict with the SVM.
+    /// \param features: the features
+    /// \param[out] labels: the predicted labels
     template <typename FEATURES, typename LABELS>
     void predict(
             FEATURES const & features,
@@ -103,6 +86,8 @@ public:
     ) const;
 
     /// \brief Transform the labels to +1 and -1.
+    /// \param labels_in: the labels that should be transformed
+    /// \param[out] labels_out: the transformed labels
     template <typename LABELS>
     void transform_external_labels(
             LABELS const & labels_in,
@@ -112,24 +97,38 @@ public:
 protected:
 
     /// \brief Find mean and standard deviation of the given features and save them.
+    /// \param features: the features
     template <typename FEATURES>
     void find_normalization(
             FEATURES const & features
     );
 
     /// \brief Apply the current normalization on the given features and add the bias feature.
+    /// \param features_in: the features that shall be normalized
+    /// \param[out] features_out: the normalized features
     template <typename FEATURES>
     void apply_normalization(
             FEATURES const & features_in,
             MultiArray<2, double> & features_out
     ) const;
 
+    /// \brief The random engine.
     RandEngine const & randengine_;
+
+    /// \brief The labels that were found in training.
     std::vector<LabelType> distinct_labels_;
+
+    /// \brief The beta vector that is computed in training.
     MultiArray<1, double> beta_;
+
+    /// \brief The vector with the mean of each feature dimension of the training data.
     MultiArray<1, double> mean_;
+
+    /// \brief The vector with the standard deviation of each feature dimension of the training data.
     MultiArray<1, double> std_dev_;
-    double B_; // value of the bias feature
+
+    /// \brief Value of the bias feature.
+    double B_;
 };
 
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
@@ -195,24 +194,13 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         double max_grad = std::numeric_limits<double>::lowest();
         for (size_t i : indices)
         {
-            // Compute the scalar products v = x_i * beta.
+            // Compute the gradient.
             double v = 0.;
             for (size_t j = 0; j < num_features; ++j)
             {
                 v += normalized_features(i, j) * beta_(j);
             }
-
-            // Find the gradient.
-            auto grad = label_ids(i) * v - 1;
-
-            // Find the projected gradient (for the stopping criteria).
-            auto proj_grad = grad;
-            if (alpha(i) <= 0)
-                proj_grad = std::min(grad, 0.);
-            else if (alpha(i) >= U)
-                proj_grad = std::max(grad, 0.);
-            min_grad = std::min(min_grad, proj_grad);
-            max_grad = std::max(max_grad, proj_grad);
+            auto const grad = label_ids(i) * v - 1;
 
             // Update alpha
             auto old_alpha = alpha(i);
@@ -224,6 +212,16 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
                 beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha(i) - old_alpha);
             }
 
+            // Compute the projected gradient (for the stopping criteria).
+            auto proj_grad = grad;
+            if (alpha(i) <= 0)
+                proj_grad = std::min(grad, 0.);
+            else if (alpha(i) >= U)
+                proj_grad = std::max(grad, 0.);
+            min_grad = std::min(min_grad, proj_grad);
+            max_grad = std::max(max_grad, proj_grad);
+
+            // Update the stopping criteria.
             if (std::abs(alpha(i) - old_alpha) > stop.alpha_tol_)
             {
                 ++diff_count;
