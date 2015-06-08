@@ -482,7 +482,7 @@ public:
 
     DecisionTree0(size_t const seed)
         : tree_(),
-          node_labels_(),
+          node_main_label_(),
           node_splits_(),
           num_labels_(0),
           randengine_(seed),
@@ -524,9 +524,9 @@ public:
     }
 
     /// \brief Return the label of the leaf with the given index.
-    LabelType leaf_label(size_t leaf_index) const
+    LabelType leaf_main_label(size_t leaf_index) const
     {
-        return node_labels_.at(tree_.getLeafNode(leaf_index));
+        return node_main_label_.at(tree_.getLeafNode(leaf_index));
     }
 
     /// \brief Return the graph structure.
@@ -536,12 +536,12 @@ public:
     }
 
     /// \brief Return the node labels.
-    NodeMap<LabelType> const & node_labels() const
+    NodeMap<LabelType> const & node_main_label() const
     {
-        return node_labels_;
+        return node_main_label_;
     }
 
-    /// \brief Return the node ids of the leaves that contains the given instances.
+    /// \brief Return the node ids of the leaves that contain the given instances.
     template <typename FEATURES>
     void leaf_ids(
             FEATURES const & features,
@@ -554,7 +554,13 @@ protected:
     Graph tree_;
 
     /// \brief The node labels that were found in training.
-    NodeMap<LabelType> node_labels_;
+    NodeMap<LabelType> node_main_label_;
+
+    /// \brief Node map with the probabilities of the classes in each leaf.
+    NodeMap<std::vector<double> > label_probs_;
+
+    /// \brief The number of instances in each leaf.
+    NodeMap<size_t> instance_count_;
 
     /// \brief The split of each node.
     NodeMap<Split> node_splits_;
@@ -640,7 +646,24 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         if (!do_split || !split_found)
         {
             // Make the node terminal.
-            node_labels_[node] = first_label;
+
+            // Count the instances and get the probabilities of each class.
+            size_t count = 0;
+            std::vector<double> probs(num_labels_);
+            for (auto it = instances.begin; it != instances.end; ++it)
+            {
+                ++count;
+                ++probs[labels(*it)];
+            }
+            for (size_t i = 0; i < probs.size(); ++i)
+            {
+                probs[i] /= count;
+            }
+
+            // Save the data in the node maps.
+            label_probs_.emplace(node, probs);
+            instance_count_[node] = count;
+            node_main_label_[node] = first_label;
         }
     }
 }
@@ -679,7 +702,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
                  node = tree_.getChild(node, 1);
              }
         }
-        pred_y(i) = node_labels_.at(node);
+        pred_y(i) = node_main_label_.at(node);
     }
 }
 
@@ -845,7 +868,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     // Translate the labels to the label ids.
     MultiArray<1, size_t> data_y_id_arr(data_y.shape());
     transform_external_labels(data_y, data_y_id_arr);
-    LabelGetter<size_t> data_y_id(data_y_id_arr); // TODO: What if LABELS is specialized?
+    LabelGetter<size_t> data_y_id(data_y_id_arr);
 
     // Create a named lambda to train a single tree with index i.
     auto train_tree = [this, & data_x, & data_y_id](size_t i) {
@@ -1065,7 +1088,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     for (Tree const & tree : rf_.trees())
     {
         tree_graphs.push_back(tree.get_graph());
-        tree_node_maps.push_back(tree.node_labels());
+        tree_node_maps.push_back(tree.node_main_label());
     }
     rf_adaptor_.set_forest(tree_graphs);
     auto node_labels = rf_adaptor_.merge_node_maps(tree_node_maps);
@@ -1083,6 +1106,12 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         weights_(i, label) = 1;
         weights_(i, 1-label) = 0;
     }
+
+
+
+
+
+
 
     // Get the leaf nodes of the training instances.
     MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());

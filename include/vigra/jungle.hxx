@@ -132,6 +132,11 @@ namespace detail
         {
             map_.clear();
         }
+        template <typename... ARGS>
+        std::pair<iterator, bool> emplace(ARGS &&... args)
+        {
+            return map_.emplace(std::forward<ARGS>(args)...);
+        }
 
     protected:
         Map map_;
