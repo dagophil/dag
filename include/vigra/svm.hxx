@@ -167,6 +167,10 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
                   "TwoClassSVM::train(): Wrong label type.");
 
+
+    // TODO: Optimize algorithm for sparse features.
+
+
     size_t const num_instances = features.shape()[0];
     size_t num_features = features.shape()[1]+1; // +1 for the bias feature
 
@@ -214,9 +218,9 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     if (alpha_.size() == num_instances)
     {
         // The alphas are initialized, so we must create the according betas.
-        for (size_t j = 0; j < num_features; ++j)
+        for (size_t i = 0; i < num_instances; ++i)
         {
-            for (size_t i = 0; i < num_instances; ++i)
+            for (size_t j = 0; j < num_features; ++j)
             {
                 beta_(j) += alpha_(i) * label_ids(i) * normalized_features(i, j);
             }
@@ -522,7 +526,6 @@ void ClusteredTwoClassSVM<SVM>::train(
                   "ClusteredTwoClassSVM::train(): Wrong label type.");
 
     size_t const num_instances = features.shape()[0];
-    size_t const num_features = features.shape()[1];
 
     // Initialize the alphas.
     if (alpha_.size() != num_instances)

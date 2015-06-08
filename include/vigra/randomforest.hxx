@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <thread>
 #include <stack>
+#include <vigra/svm.hxx>
 
 //#include "dagraph.hxx"
 #include "jungle.hxx"
@@ -101,9 +102,187 @@ namespace detail
 //        return n_left*gini_left + n_right*gini_right;
 //    }
 
+    /// \brief Proxy class that is used to forward assignments to the SparseFeatureGetter.
+    template <typename FEATURES>
+    class SparseFeatureGetterProxy
+    {
+    public:
+
+        typedef FEATURES Features;
+        typedef typename Features::value_type value_type;
+
+        SparseFeatureGetterProxy(
+                Features & features,
+                size_t const i,
+                size_t const j
+        )   : features_(features),
+              i_(i),
+              j_(j)
+        {}
+
+        operator value_type() const
+        {
+            if (i_ >= features_.shape()[0] || j_ >= features_.shape()[1])
+                vigra_fail("Proxy::operator value_type(): Invalid Proxy.");
+
+            auto const & indices = features_.indices_[i_];
+            auto const & values = features_.values_[i_];
+            auto const lower = std::lower_bound(indices.begin(), indices.end(), j_);
+            if (lower == indices.end() || *lower != j_)
+            {
+                return 0;
+            }
+            else
+            {
+                size_t ind = std::distance(indices.begin(), lower);
+                return values[ind];
+            }
+        }
+
+        SparseFeatureGetterProxy & operator=(value_type const & v)
+        {
+            if (i_ >= features_.shape()[0] || j_ >= features_.shape()[1])
+                vigra_fail("Proxy::operator=(): Invalid Proxy.");
+
+            auto & indices = features_.indices_[i_];
+            auto & values = features_.values_[i_];
+            auto const lower = std::lower_bound(indices.begin(), indices.end(), j_);
+            size_t ind = std::distance(indices.begin(), lower);
+
+            if (v == 0)
+            {
+                // Delete the value if it was non-zero before.
+                if (lower != indices.end() && *lower == j_)
+                {
+                    indices.erase(lower);
+                    values.erase(values.begin()+ind);
+                }
+            }
+            else
+            {
+                if (lower == indices.end() || *lower != j_)
+                {
+                    indices.insert(lower, j_);
+                    values.insert(values.begin()+ind, v);
+                }
+                else
+                {
+                    values[ind] = v;
+                }
+            }
+            return *this;
+        }
+
+    protected:
+
+        Features & features_;
+        size_t const i_;
+        size_t const j_;
+    };
+
+    /// \brief Proxy class that is used to forward assignments to the SparseFeatureGetter.
+    template <typename FEATURES>
+    class SparseFeatureGetterConstProxy
+    {
+    public:
+
+        typedef FEATURES Features;
+        typedef typename Features::value_type value_type;
+
+        SparseFeatureGetterConstProxy(
+                Features const & features,
+                size_t const i,
+                size_t const j
+        )   : features_(features),
+              i_(i),
+              j_(j)
+        {}
+
+        operator value_type() const
+        {
+            if (i_ >= features_.shape()[0] || j_ >= features_.shape()[1])
+                vigra_fail("ConstProxy::operator value_type(): Invalid Proxy.");
+
+            auto const & indices = features_.indices_[i_];
+            auto const & values = features_.values_[i_];
+            auto const lower = std::lower_bound(indices.begin(), indices.end(), j_);
+            if (lower == indices.end() || *lower != j_)
+            {
+                return 0;
+            }
+            else
+            {
+                size_t ind = std::distance(indices.begin(), lower);
+                return values[ind];
+            }
+        }
+
+    protected:
+
+        Features const & features_;
+        size_t const i_;
+        size_t const j_;
+    };
+
 } // namespace detail
 
-/// \brief This class implements operator[] to return the feature vector of the requested instance.
+
+/// \brief Wrapper class for the features. The SparseFeatureGetter saves sparse data by saving only the non-zero values.
+///
+/// The SparseFeatureGetter saves two arrays for each instance:
+/// One array with the non-zero values and one array with the indices of those values.
+template <typename T>
+class SparseFeatureGetter
+{
+public:
+
+    typedef T value_type;
+    typedef value_type & reference;
+    typedef value_type const & const_reference;
+    typedef detail::SparseFeatureGetterProxy<SparseFeatureGetter> Proxy;
+    typedef detail::SparseFeatureGetterConstProxy<SparseFeatureGetter> ConstProxy;
+
+    friend Proxy;
+    friend ConstProxy;
+
+    SparseFeatureGetter(Shape2 const & shape = Shape2(0, 0))
+        : shape_(shape),
+          indices_(shape[0]),
+          values_(shape[0])
+    {}
+
+    void reshape(Shape2 const & shape)
+    {
+        shape_ = shape;
+        indices_.resize(shape_[0]);
+        values_.resize(shape_[0]);
+    }
+
+    Shape2 const & shape() const
+    {
+        return shape_;
+    }
+
+    Proxy operator()(size_t const i, size_t const j)
+    {
+        return Proxy(*this, i, j);
+    }
+
+    ConstProxy const operator()(size_t const i, size_t const j) const
+    {
+        return ConstProxy(*this, i, j);
+    }
+
+protected:
+
+    std::vector<std::vector<size_t> > indices_;
+    std::vector<std::vector<value_type> > values_;
+    Shape2 shape_;
+};
+
+
+
+/// \brief Wrapper class for the features. The FeatureGetter saves a reference to a multi array and forwards the calls to that array.
 template <typename T>
 class FeatureGetter
 {
@@ -511,6 +690,12 @@ public:
             LABELS & pred_y
     ) const;
 
+    /// \brief Return the number of labels.
+    void get_num_labels() const
+    {
+        return num_labels_;
+    }
+
     /// \brief Set the number of labels.
     void set_num_labels(size_t num_labels)
     {
@@ -539,6 +724,12 @@ public:
     NodeMap<LabelType> const & node_main_label() const
     {
         return node_main_label_;
+    }
+
+    /// \brief Return the class probabilities.
+    NodeMap<std::vector<double> > const & label_probs() const
+    {
+        return label_probs_;
     }
 
     /// \brief Return the node ids of the leaves that contain the given instances.
@@ -1079,47 +1270,38 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
 
     typedef typename Tree::Graph TreeGraph;
     typedef typename TreeGraph::Node TreeNode;
-    typedef typename Tree:: template NodeMap<typename Tree::LabelType> TreeNodeMap;
+    typedef typename Tree:: template NodeMap<std::vector<double> > ProbabilityMap;
     typedef typename ForestAdaptor::Node Node;
 
     // Create an adaptor for the graph structure and the property maps.
     std::vector<TreeGraph> tree_graphs;
-    std::vector<TreeNodeMap> tree_node_maps;
+    std::vector<ProbabilityMap> tree_prob_maps;
     for (Tree const & tree : rf_.trees())
     {
         tree_graphs.push_back(tree.get_graph());
-        tree_node_maps.push_back(tree.node_main_label());
+        tree_prob_maps.push_back(tree.label_probs());
     }
     rf_adaptor_.set_forest(tree_graphs);
-    auto node_labels = rf_adaptor_.merge_node_maps(tree_node_maps);
+    auto label_probs = rf_adaptor_.merge_node_maps(tree_prob_maps);
 
     // Create the weight matrix.
     weights_.reshape(Shape2(rf_adaptor_.numLeaves(), rf_.num_classes()));
     for (size_t i = 0; i < rf_adaptor_.numLeaves(); ++i)
     {
         Node node = rf_adaptor_.getLeafNode(i);
-        auto label = node_labels[node];
-
-        vigra_assert(label == 0 || label == 1,
-                     "GloballyRefinedRandomForest::train(): Currently only implemented for two class problem with classes 0 and 1.");
-
-        weights_(i, label) = 1;
-        weights_(i, 1-label) = 0;
+        auto probs = label_probs[node];
+        for (size_t j = 0; j < probs.size(); ++j)
+        {
+            weights_(i, j) = probs[j];
+        }
     }
-
-
-
-
-
-
 
     // Get the leaf nodes of the training instances.
     MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());
     rf_.leaf_ids(features, leaf_ids);
 
     // Create the index vectors (= features) for the SVM.
-    // The SVM will multiply the weights (double) with the index vectors, that's why the index vectors are double, too.
-    MultiArray<2, double> index_vectors(Shape2(features.num_instances(), rf_adaptor_.numLeaves()), 0.);
+    SparseFeatureGetter<UInt8> svm_features(Shape2(features.num_instances(), rf_adaptor_.numLeaves()));
     for (size_t i = 0; i < features.num_instances(); ++i)
     {
         for (size_t j = 0; j < rf_.num_trees(); ++j)
@@ -1127,17 +1309,19 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
             TreeNode tree_node(leaf_ids(i, j));
             Node node = rf_adaptor_.tree_to_forest(j, tree_node);
             size_t node_index = rf_adaptor_.getLeafIndex(node);
-            index_vectors(i, node_index) = 1.;
+            svm_features(i, node_index) = 1;
         }
     }
 
     // Train the SVM.
-    FeatureGetter<double> svm_feats(index_vectors);
-    MultiArray<1, size_t> svm_labels_arr(labels.size());
-    rf_.transform_external_labels(labels, svm_labels_arr);
-    LabelGetter<size_t> svm_labels(svm_labels_arr);
-//    LibLinearSVM svm;
-//    svm.fit(svm_feats, svm_labels, weights_);
+    MultiArray<1, size_t> svm_labels(labels.size());
+    rf_.transform_external_labels(labels, svm_labels);
+    TwoClassSVM<UInt8, size_t> svm;
+    svm.train(svm_features, svm_labels);
+
+
+
+
 }
 
 
