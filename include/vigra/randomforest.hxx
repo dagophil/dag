@@ -190,6 +190,8 @@ class LabelGetter
 {
 public:
     typedef T value_type;
+    typedef value_type & reference;
+    typedef value_type const & const_reference;
     typedef typename MultiArrayView<1, T>::iterator iterator;
     typedef typename MultiArrayView<1, T>::const_iterator const_iterator;
     typedef typename MultiArrayView<1, T>::difference_type difference_type;
@@ -199,15 +201,15 @@ public:
     {}
 
     /// \brief Return the label for instance i.
-    T & operator[](size_t i)
+    reference operator()(size_t i)
     {
-        return arr_[i];
+        return arr_(i);
     }
 
     /// \brief Return the label for instance i.
-    T const & operator[](size_t i) const
+    const_reference operator()(size_t i) const
     {
-        return arr_[i];
+        return arr_(i);
     }
 
     /// \brief Return the number of instances.
@@ -248,7 +250,7 @@ public:
     }
 
 protected:
-    MultiArrayView<1, T> const & arr_;
+    MultiArrayView<1, value_type> const & arr_;
 };
 
 
@@ -295,11 +297,11 @@ public:
         if (std::distance(begin, end) < 2)
             return true;
 
-        first_label = labels[*begin];
+        first_label = labels(*begin);
         ++begin;
         while (begin != end)
         {
-            if (labels[*begin] != first_label)
+            if (labels(*begin) != first_label)
                 return false;
             ++begin;
         }
@@ -322,7 +324,7 @@ public:
     {
         for (auto it = begin; it != end; ++it)
         {
-            size_t label = labels[*it];
+            size_t label = labels(*it);
             if (label >= labels_prior_.size())
                 vigra_fail("GiniScorer(): Max label is larger than expected.");
             ++labels_prior_[label];
@@ -425,7 +427,7 @@ public:
                 size_t const right_instance = inst_begin[i+1];
 
                 // Add the label to the left child.
-                size_t const label = static_cast<size_t>(labels[left_instance]);
+                size_t const label = static_cast<size_t>(labels(left_instance));
                 scorer.add_left(label);
 
                 // Skip if there is no new split.
@@ -668,7 +670,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         while (tree_.outDegree(node) > 0)
         {
              auto const & s = node_splits_.at(node);
-             if (feats[s.feature_index] < s.thresh)
+             if (feats(s.feature_index) < s.thresh)
              {
                  node = tree_.getChild(node, 0);
              }
@@ -677,7 +679,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
                  node = tree_.getChild(node, 1);
              }
         }
-        pred_y[i] = node_labels_.at(node);
+        pred_y(i) = node_labels_.at(node);
     }
 }
 
@@ -704,7 +706,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
         while (tree_.outDegree(node) > 0)
         {
             auto const & s = node_splits_.at(node);
-            if (feats[s.feature_index] < s.thresh)
+            if (feats(s.feature_index) < s.thresh)
             {
                 node = tree_.getChild(node, 0);
             }
@@ -713,7 +715,7 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
                 node = tree_.getChild(node, 1);
             }
         }
-        indices[i] = node.id();
+        indices(i) = node.id();
     }
 }
 
@@ -934,7 +936,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         std::fill(label_counts_vec.begin(), label_counts_vec.end(), 0);
         for (size_t k = 0; k < dtrees_.size(); ++k)
         {
-            size_t const label = labels[Shape2(i, k)];
+            size_t const label = labels(i, k);
             if (label >= label_counts_vec.size())
                 vigra_fail("Prediction of a label that did not exist in training.");
             ++label_counts_vec[label];
@@ -953,7 +955,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         }
 
         // Write the label in the output array.
-        pred_y[i] = distinct_labels_[max_label];
+        pred_y(i) = distinct_labels_[max_label];
     }
 }
 
@@ -995,7 +997,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::transform_external_label
     }
     for (size_t i = 0; i < labels_in.size(); ++i)
     {
-        labels_out[i] = label_id[labels_in[i]]; // TODO: Maybe use () operator instead of [] operator.
+        labels_out(i) = label_id[labels_in(i)];
     }
 }
 

@@ -605,7 +605,7 @@ void ClusteredTwoClassSVM<SVM>::train(
     {
         final_svm_.set_alpha(alpha_);
         final_svm_.train(features, labels, U, B, stop);
-        auto svm_alpha = final_svm_.alpha();
+        auto const & svm_alpha = final_svm_.alpha();
         vigra_assert(svm_alpha.size() == num_instances,
                      "ClusteredTwoClassSVM::train(): Final SVM has wrong number of alphas.");
         for (size_t i = 0; i < num_instances; ++i)
