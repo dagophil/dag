@@ -4,6 +4,48 @@
 #include <vigra/multi_array.hxx>
 #include <vigra/kmeans.hxx>
 
+void test_lineview()
+{
+    using namespace vigra;
+
+    {
+        typedef MultiArray<1, size_t> Array;
+        Array x(50);
+        for (size_t i = 0; i < x.size(); ++i)
+            x[i] = i;
+        std::vector<size_t> lines {
+            5, 7, 10, 22, 29
+        };
+        detail::LineView<Array> view(x, lines);
+        std::vector<size_t> x_out;
+        for (auto it = view.begin(); it != view.end(); ++it)
+            x_out.push_back(*it);
+        vigra_assert(lines == x_out, "Error in LineView.");
+    }
+
+    {
+        typedef MultiArray<2, double> Array;
+        Array x(Shape2(5, 3));
+        for (size_t j = 0; j < x.shape()[1]; ++j)
+            for (size_t i = 0; i < x.shape()[0]; ++i)
+                x(i, j) = (i+j)/2.;
+        std::vector<size_t> lines {
+            1, 3, 4
+        };
+        detail::LineView<Array> view(x, lines);
+        std::vector<double> x_out;
+        for (auto it = view.begin(); it != view.end(); ++it)
+            x_out.push_back(*it);
+        std::vector<double> x_expected {
+            0.5, 1.5, 2.,
+            1, 2., 2.5,
+            1.5, 2.5, 3.
+        };
+        vigra_assert(x_out == x_expected, "Error in LineView.");
+    }
+
+}
+
 void test_kmeans()
 {
     using namespace vigra;
@@ -37,5 +79,6 @@ void test_kmeans()
 
 int main()
 {
+    test_lineview();
     test_kmeans();
 }

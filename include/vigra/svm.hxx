@@ -95,6 +95,18 @@ public:
             MultiArrayView<1, int> & labels_out
     ) const;
 
+    /// \brief Setter for the alpha vector.
+    template <typename ARRAY>
+    void set_alpha(ARRAY const & new_alpha)
+    {
+        alpha_.reshape(Shape1(new_alpha.size()));
+        size_t i = 0;
+        for (auto it = new_alpha.begin(); it != new_alpha.end(); ++it, ++i)
+        {
+            alpha_(i) = *it;
+        }
+    }
+
     /// \brief Getter for the alpha vector.
     MultiArray<1, double> const & alpha() const
     {
@@ -156,23 +168,30 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
                   "TwoClassSVM::train(): Wrong label type.");
 
     size_t const num_instances = features.shape()[0];
-    size_t num_features = features.shape()[1];
+    size_t num_features = features.shape()[1]+1; // +1 for the bias feature
 
     // Save the bias feature.
     B_ = B;
 
     // Find the distinct labels.
     auto dlabels = std::set<LabelType>(labels.begin(), labels.end());
-    vigra_precondition(dlabels.size() == 2, "TwoClassSVM::train(): Number of classes must be 2.");
+    vigra_precondition(dlabels.size() == 1 || dlabels.size() == 2,
+                       "TwoClassSVM::train(): Number of classes must be 1 or 2.");
     distinct_labels_.resize(dlabels.size());
     std::copy(dlabels.begin(), dlabels.end(), distinct_labels_.begin());
+
+    // Early out: There is only one class.
+    if (distinct_labels_.size() == 1)
+    {
+        beta_.reshape(Shape1(num_features));
+        return;
+    }
 
     // Translate the labels to +1 and -1.
     auto label_ids = MultiArray<1, int>(labels.size());
     transform_external_labels(labels, label_ids);
 
     // Normalize the features.
-    ++num_features; // increase the number since the bias feature will be added
     auto normalized_features = MultiArray<2, double>(Shape2(num_instances, num_features));
     find_normalization(features);
     apply_normalization(features, normalized_features);
@@ -190,9 +209,26 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         x_squ(i) = v;
     }
 
-    // Initialize the alphas and betas with 0 and do the SVM loop.
-    alpha_.reshape(Shape1(num_instances), 0.);
+    // Initialize alphas and betas.
     beta_.reshape(Shape1(num_features), 0.);
+    if (alpha_.size() == num_instances)
+    {
+        // The alphas are initialized, so we must create the according betas.
+        for (size_t j = 0; j < num_features; ++j)
+        {
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                beta_(j) += alpha_(i) * label_ids(i) * normalized_features(i, j);
+            }
+        }
+    }
+    else
+    {
+        // The alphas are not initialized, so all alphas and betas are 0.
+        alpha_.reshape(Shape1(num_instances), 0.);
+    }
+
+    // Do the SVM loop.
     auto indices = std::vector<size_t>(num_instances);
     std::iota(indices.begin(), indices.end(), 0);
     auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
@@ -262,17 +298,27 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
                   "TwoClassSVM::predict(): Wrong feature type.");
     static_assert(std::is_convertible<LabelType, typename LABELS::value_type>(),
                   "TwoClassSVM::predict(): Wrong label type.");
-    vigra_precondition(distinct_labels_.size() == 2,
-                       "TwoClassSVM::predict(): Number of labels found in training must be 2.");
+    vigra_precondition(distinct_labels_.size() == 1 || distinct_labels_.size() == 2,
+                       "TwoClassSVM::predict(): Number of labels found in training must be 1 or 2.");
     vigra_precondition(features.shape()[1]+1 == beta_.size(),
                        "TwoClassSVM::predict(): Wrong number of features.");
 
     size_t const num_instances = features.shape()[0];
     size_t const num_features = features.shape()[1]+1;
 
+    // If only one class was found in training, always predict this class.
+    if (distinct_labels_.size() == 1)
+    {
+        for (size_t i = 0; i < num_instances; ++i)
+        {
+            labels(i) = distinct_labels_[0];
+        }
+        return;
+    }
+
+    // If two classes were found in training, we must do the "real" SVM prediction.
     auto normalized_features = MultiArray<2, double>(Shape2(num_instances, num_features));
     apply_normalization(features, normalized_features);
-
     for (size_t i = 0; i < num_instances; ++i)
     {
         double v = 0;
@@ -342,7 +388,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::find_normalization(
         std_dev_[j] = std::sqrt(std_dev_[j] / (num_instances-1.));
         if (std_dev_[j] == 0)
         {
-            std::cout << "Warning: Standard deviation is zero, so a division by zero will occur." << std::endl;
+            std_dev_[j] = 1e-6;
         }
     }
 }
@@ -415,16 +461,32 @@ public:
             StoppingCriteria const & stop = StoppingCriteria()
     );
 
-//    /// \brief Predict with the SVM.
-//    /// \param features: the features
-//    /// \param labels[out]: the predicted labels
-//    template <typename FEATURES, typename LABELS>
-//    void predict(
-//            FEATURES const & features,
-//            LABELS & labels
-//    ) const;
+    /// \brief Predict with the SVM.
+    /// \param features: the features
+    /// \param labels[out]: the predicted labels
+    template <typename FEATURES, typename LABELS>
+    void predict(
+            FEATURES const & features,
+            LABELS & labels
+    ) const;
+
+    void set_alpha(MultiArrayView<1, double> const & new_alpha)
+    {
+        alpha_ = new_alpha;
+    }
+
+    MultiArray<1, double> const & alpha() const
+    {
+        return alpha_;
+    }
 
 protected:
+
+    void create_cluster_sample(
+            size_t const round,
+            size_t const num_instances,
+            std::vector<size_t> & sample
+    ) const;
 
     /// \brief Number of rounds.
     size_t const rounds_;
@@ -441,8 +503,8 @@ protected:
     /// \brief The alpha vector that is computed in training.
     MultiArray<1, double> alpha_;
 
-    /// \brief The beta vector that is computed in training.
-    MultiArray<1, double> beta_;
+    /// \brief The final SVM that is used for the prediction.
+    SVM final_svm_;
 };
 
 template <typename SVM>
@@ -462,68 +524,140 @@ void ClusteredTwoClassSVM<SVM>::train(
     size_t const num_instances = features.shape()[0];
     size_t const num_features = features.shape()[1];
 
+    // Initialize the alphas.
+    if (alpha_.size() != num_instances)
+    {
+        alpha_.reshape(Shape1(num_instances), 0.);
+    }
+
     for (size_t l = 0; l+1 < rounds_; ++l)
     {
         size_t const num_clusters = std::pow(k_, rounds_ - 1 - l);
 
         // Draw a random sample of the instances for the clustering.
-        UniformIntRandomFunctor<MersenneTwister> rand(randengine_);
         std::vector<size_t> sample_indices;
-        if (l == 0)
-        {
-            // Consider all instances.
-            sample_indices.resize(num_instances);
-            std::iota(sample_indices.begin(), sample_indices.end(), 0);
-        }
-        else
-        {
-            // Consider all instances with alpha > 0.
-            for (size_t i = 0; i < num_instances; ++i)
-            {
-                if (alpha_(i) > 0)
-                {
-                    sample_indices.push_back(i);
-                }
-            }
-        }
-        for (size_t i = 0; i < num_clustering_samples_; ++i)
-        {
-            size_t ii = i+rand(sample_indices.size()-i);
-            std::swap(sample_indices[i], sample_indices[ii]);
-        }
-        sample_indices.resize(num_clustering_samples_);
+        create_cluster_sample(l, num_instances, sample_indices);
 
         // Do the clustering.
         std::vector<size_t> instance_clusters;
-        KMeansStoppingCriteria stop;
-        kmeans(features, num_clusters, instance_clusters, stop, sample_indices);
+        KMeansStoppingCriteria kmeans_stop;
+        kmeans(features, num_clusters, instance_clusters, kmeans_stop, sample_indices);
         vigra_assert(instance_clusters.size() == num_instances,
                      "ClusteredTwoClassSVM::train(): The kmeans algorithm produced the wrong number of instances.");
 
-        // Create the sub views on the instances.
+        // Create the instance views for the sub SVMs.
         std::vector<std::vector<size_t> > sub_instance_indices(num_clusters);
         for (size_t i = 0; i < num_instances; ++i)
         {
             sub_instance_indices[instance_clusters[i]].push_back(i);
         }
-        std::vector<detail::LineView<FEATURES> > sub_features;
+
         for (size_t c = 0; c < num_clusters; ++c)
         {
-            sub_features.push_back(detail::LineView<FEATURES>(features, sub_instance_indices[c]));
+            // Get the sub problem.
+            auto const & indices = sub_instance_indices[c];
+            detail::LineView<FEATURES> sub_features(features, indices);
+            detail::LineView<LABELS> sub_labels(labels, indices);
+            detail::LineView<MultiArray<1, double> > sub_alpha(alpha_, indices);
+
+            // Train the SVM on the sub problem.
+            SVM svm;
+            svm.set_alpha(sub_alpha);
+            svm.train(sub_features, sub_labels, U, B, stop);
+
+            // Update the alphas.
+            auto const & svm_alpha = svm.alpha();
+            vigra_assert(svm_alpha.size() == indices.size(),
+                         "ClusteredTwoClassSVM::train(): Sub SVM has wrong number of alphas.");
+            for (size_t i = 0; i < svm_alpha.size(); ++i)
+            {
+                alpha_(indices[i]) = svm_alpha(i);
+            }
         }
+    }
 
-        // TODO: Run the SVMs on the sub problem.
+    // Refine the solution by running an SVM on all instances with alpha > 0.
+    {
+        std::vector<size_t> indices;
+        for (size_t i = 0; i < num_instances; ++i)
+        {
+            if (alpha_(i) > 0)
+            {
+                indices.push_back(i);
+            }
+        }
+        detail::LineView<FEATURES> sub_features(features, indices);
+        detail::LineView<LABELS> sub_labels(labels, indices);
+        detail::LineView<MultiArray<1, double> > sub_alpha(alpha_, indices);
+        SVM svm;
+        svm.set_alpha(sub_alpha);
+        svm.train(sub_features, sub_labels, U, B, stop);
+        auto const & svm_alpha = svm.alpha();
+        vigra_assert(svm_alpha.size() == indices.size(),
+                     "ClusteredTwoClassSVM::train(): Sub SVM has wrong number of alphas.");
+        for (size_t i = 0; i < svm_alpha.size(); ++i)
+        {
+            alpha_(indices[i]) = svm_alpha(i);
+        }
+    }
 
+    // Run the final SVM on all instances.
+    {
+        final_svm_.set_alpha(alpha_);
+        final_svm_.train(features, labels, U, B, stop);
+        auto svm_alpha = final_svm_.alpha();
+        vigra_assert(svm_alpha.size() == num_instances,
+                     "ClusteredTwoClassSVM::train(): Final SVM has wrong number of alphas.");
+        for (size_t i = 0; i < num_instances; ++i)
+        {
+            alpha_(i) = svm_alpha(i);
+        }
+    }
+}
 
+template <typename SVM>
+template <typename FEATURES, typename LABELS>
+void ClusteredTwoClassSVM<SVM>::predict(
+        FEATURES const & features,
+        LABELS & labels
+) const {
+    final_svm_.predict(features, labels);
+}
 
+template <typename SVM>
+void ClusteredTwoClassSVM<SVM>::create_cluster_sample(
+        size_t const round,
+        size_t const num_instances,
+        std::vector<size_t> & sample
+) const {
+    if (round == 0)
+    {
+        // First round: Consider all instances.
+        sample.resize(num_instances);
+        std::iota(sample.begin(), sample.end(), 0);
+    }
+    else
+    {
+        // Other rounds: Consider all instances with alpha > 0.
+        for (size_t i = 0; i < num_instances; ++i)
+        {
+            if (alpha_(i) > 0)
+            {
+                sample.push_back(i);
+            }
+        }
+    }
 
-
-
-
-
-
-        std::cout << "done" << std::endl;
-        std::exit(0);
+    // Do the sampling.
+    if (sample.size() > num_clustering_samples_)
+    {
+        UniformIntRandomFunctor<MersenneTwister> rand(randengine_);
+        for (size_t i = 0; i < num_clustering_samples_; ++i)
+        {
+            size_t ii = i+rand(sample.size()-i);
+            std::swap(sample[i], sample[ii]);
+        }
+        sample.resize(num_clustering_samples_);
     }
 }
 

@@ -84,7 +84,8 @@ void test_svm()
 
         // Train a SVM.
         SVM::StoppingCriteria stop;
-        stop.max_relative_diffs_ = 0.01;
+//        stop.max_relative_diffs_ = 0.02;
+        stop.grad_tol_ = 0.001;
         SVM svm;
         svm.train(train_x, train_y, 1.0, 1.5, stop);
 
@@ -129,22 +130,23 @@ void test_clustered_svm()
 
         // Train a SVM.
         SVM::StoppingCriteria stop;
-        stop.max_relative_diffs_ = 0.01;
+//        stop.max_relative_diffs_ = 0.02;
+        stop.grad_tol_ = 0.001;
         SVM svm(5, 4, 2000);
         svm.train(train_x, train_y, 1.0, 1.5, stop);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());
-//        svm.predict(test_x, pred_y);
+        svm.predict(test_x, pred_y);
 
-//        // Count the correct predicted instances.
-//        size_t count = 0;
-//        for (size_t i = 0; i < test_y.size(); ++i)
-//        {
-//            if (pred_y(i) == test_y(i))
-//                ++count;
-//        }
-//        std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+        // Count the correct predicted instances.
+        size_t count = 0;
+        for (size_t i = 0; i < test_y.size(); ++i)
+        {
+            if (pred_y(i) == test_y(i))
+                ++count;
+        }
+        std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
     }
 
     std::cout << "finished test_clustered_svm()" << std::endl;
