@@ -8,12 +8,443 @@
 #include <vigra/multi_array.hxx>
 #include <vigra/random.hxx>
 
-#include <vigra/kmeans.hxx>
+#include "kmeans.hxx"
+#include "feature_getter.hxx"
 
 
 
 namespace vigra
 {
+
+namespace detail
+{
+
+    template <typename IN, typename OUT>
+    class NormalizeFunctor
+    {
+    public:
+
+        typedef double FloatType;
+        typedef typename IN::value_type FeatureTypeIn;
+        typedef typename OUT::value_type FeatureTypeOut;
+
+        static_assert(std::is_convertible<FeatureTypeIn, FloatType>(),
+                      "NormalizeFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<FloatType, FeatureTypeOut>(),
+                      "NormalizeFunctor: Wrong feature type.");
+
+        NormalizeFunctor(FloatType const bias_value = FloatType())
+            : bias_value_(bias_value),
+              mean_(0),
+              std_dev_(0)
+        {}
+
+        NormalizeFunctor(
+                FloatType const bias_value,
+                std::vector<FloatType> const & mean,
+                std::vector<FloatType> const & std_dev
+        )   : bias_value_(bias_value),
+              mean_(mean),
+              std_dev_(std_dev)
+        {}
+
+        void find_normalization(
+                IN const & features
+        ){
+            size_t const num_instances = features.shape()[0];
+            size_t const num_features = features.shape()[1];
+
+            // Find the mean.
+            mean_.resize(num_features, 0.);
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    mean_[j] += features(i, j);
+                }
+                mean_[j] /= num_instances;
+            }
+
+            // Find the standard deviation.
+            std_dev_.resize(num_features, 0.);
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    FloatType v = features(i, j) - mean_[j];
+                    std_dev_[j] += v*v;
+                }
+                std_dev_[j] = std::sqrt(std_dev_[j] / (num_instances-1.));
+
+                // Prevent division by zero by adding a small epsilon.
+                if (std_dev_[j] == 0)
+                {
+                    std_dev_[j] = 1e-6;
+                }
+            }
+        }
+
+        void apply_normalization(
+                IN const & features_in,
+                OUT & features_out
+        ) const {
+            size_t const num_instances = features_in.shape()[0];
+            size_t const num_features = features_in.shape()[1];
+
+            // Normalize the data.
+            features_out.reshape(Shape2(num_instances, num_features+1));
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    features_out(i, j) = (features_in(i, j) - mean_[j]) / std_dev_[j];
+                }
+            }
+
+            // Add the bias feature.
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                features_out(i, num_features) = bias_value_;
+            }
+        }
+
+        std::vector<FloatType> & mean()
+        {
+            return mean_;
+        }
+
+        std::vector<FloatType> const & mean() const
+        {
+            return mean_;
+        }
+
+        std::vector<FloatType> & std_dev()
+        {
+            return std_dev_;
+        }
+
+        std::vector<FloatType> const & std_dev() const
+        {
+            return std_dev_;
+        }
+
+        FloatType bias_value_;
+
+    protected:
+
+        std::vector<FloatType> mean_;
+        std::vector<FloatType> std_dev_;
+
+    };
+
+
+
+    template <typename SVM, typename FEATURES, typename LABELS>
+    class TwoClassSVMTrainFunctor
+    {
+    public:
+
+        typedef typename SVM::StoppingCriteria StoppingCriteria;
+        typedef typename SVM::FeatureType FeatureType;
+        typedef typename SVM::LabelType LabelType;
+        typedef typename SVM::RandEngine RandEngine;
+        typedef FEATURES Features;
+        typedef LABELS Labels;
+        typedef NormalizeFunctor<Features, MultiArray<2, double> > Normalizer;
+
+        static_assert(std::is_convertible<typename Features::value_type, FeatureType>(),
+                      "TwoClassSVMTrainFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<typename Labels::value_type, LabelType>(),
+                      "TwoClassSVMTrainFunctor: Wrong label type.");
+
+        TwoClassSVMTrainFunctor(
+                SVM & svm,
+                RandEngine const & randengine = RandEngine::global()
+        )   : svm_(svm),
+              randengine_(randengine)
+        {}
+
+        void operator()(
+                Features const & features,
+                Labels const & labels,
+                double const U,
+                double const B,
+                StoppingCriteria const & stop
+        ){
+            // TODO: Remove output.
+            std::cout << "Doing non sparse SVM algorithm." << std::endl;
+
+            size_t const num_instances = features.shape()[0];
+            size_t num_features = features.shape()[1]+1; // +1 for the bias feature
+
+            // Get alpha and beta vector from the SVM.
+            auto & alpha_ = svm_.alpha();
+            auto & beta_ = svm_.beta();
+
+            // Find the feature normalization.
+            normalizer_.bias_value_ = B;
+            normalizer_.find_normalization(features);
+            auto normalized_features = MultiArray<2, double>();
+            normalizer_.apply_normalization(features, normalized_features);
+            svm_.mean() = normalizer_.mean();
+            svm_.std_dev() = normalizer_.std_dev();
+
+            // Precompute the squared norm of the instances.
+            auto x_squ = MultiArray<1, double>(Shape1(num_instances));
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                double v = 0.;
+                for (size_t j = 0; j < num_features; ++j)
+                {
+                    double f = normalized_features(i, j);
+                    v += f * f;
+                }
+                x_squ(i) = v;
+            }
+
+            // Initialize alphas and betas.
+            beta_.reshape(Shape1(num_features), 0.);
+            if (alpha_.size() == num_instances)
+            {
+                // The alphas are initialized, so we must create the according betas.
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    for (size_t j = 0; j < num_features; ++j)
+                    {
+                        beta_(j) += alpha_(i) * labels(i) * normalized_features(i, j);
+                    }
+                }
+            }
+            else
+            {
+                // The alphas are not initialized, so all alphas and betas are 0.
+                alpha_.reshape(Shape1(num_instances), 0.);
+            }
+
+            // Do the SVM loop.
+            auto indices = std::vector<size_t>(num_instances);
+            std::iota(indices.begin(), indices.end(), 0);
+            auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
+            for (size_t t = 0; t < stop.max_t_;)
+            {
+                std::random_shuffle(indices.begin(), indices.end(), rand_int);
+                size_t diff_count = 0;
+                double min_grad = std::numeric_limits<double>::max();
+                double max_grad = std::numeric_limits<double>::lowest();
+                for (size_t i : indices)
+                {
+                    // Compute the gradient.
+                    double v = 0.;
+                    for (size_t j = 0; j < num_features; ++j)
+                    {
+                        v += normalized_features(i, j) * beta_(j);
+                    }
+                    auto const grad = labels(i) * v - 1;
+
+                    // Update alpha
+                    auto old_alpha = alpha_(i);
+                    alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
+
+                    // Update beta.
+                    for (size_t j = 0; j < num_features; ++j)
+                    {
+                        beta_(j) += labels(i) * normalized_features(i, j) * (alpha_(i) - old_alpha);
+                    }
+
+                    // Compute the projected gradient (for the stopping criteria).
+                    auto proj_grad = grad;
+                    if (alpha_(i) <= 0)
+                        proj_grad = std::min(grad, 0.);
+                    else if (alpha_(i) >= U)
+                        proj_grad = std::max(grad, 0.);
+                    min_grad = std::min(min_grad, proj_grad);
+                    max_grad = std::max(max_grad, proj_grad);
+
+                    // Update the stopping criteria.
+                    if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
+                    {
+                        ++diff_count;
+                    }
+                    ++t;
+                    if (t >= stop.max_t_)
+                    {
+                        break;
+                    }
+                }
+
+                if (max_grad - min_grad < stop.grad_tol_ ||
+                        diff_count <= stop.max_total_diffs_ ||
+                        diff_count <= stop.max_relative_diffs_ * num_instances)
+                {
+                    break;
+                }
+            }
+        }
+
+    protected:
+
+        SVM & svm_;
+        RandEngine const & randengine_;
+        Normalizer normalizer_;
+
+    };
+
+
+
+    template <typename SVM, typename T, typename LABELS>
+    class TwoClassSVMTrainFunctor<SVM, SparseFeatureGetter<T>, LABELS>
+    {
+    public:
+
+        typedef typename SVM::StoppingCriteria StoppingCriteria;
+        typedef typename SVM::FeatureType FeatureType;
+        typedef typename SVM::LabelType LabelType;
+        typedef typename SVM::RandEngine RandEngine;
+        typedef SparseFeatureGetter<T> Features;
+        typedef LABELS Labels;
+        typedef NormalizeFunctor<Features, Features> Normalizer;
+
+        static_assert(std::is_convertible<typename Features::value_type, FeatureType>(),
+                      "TwoClassSVMTrainFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<typename Labels::value_type, LabelType>(),
+                      "TwoClassSVMTrainFunctor: Wrong label type.");
+
+        TwoClassSVMTrainFunctor(
+                SVM & svm,
+                RandEngine const & randengine = RandEngine::global()
+        )   : svm_(svm),
+              randengine_(randengine)
+        {}
+
+        void operator()(
+                Features const & features,
+                Labels const & labels,
+                double const U,
+                double const B,
+                StoppingCriteria const & stop
+        ){
+            size_t const num_instances = features.shape()[0];
+            size_t num_features = features.shape()[1]+1; // +1 for the bias feature
+
+            // Get alpha and beta vector from the SVM.
+            auto & alpha_ = svm_.alpha();
+            auto & beta_ = svm_.beta();
+
+            // Find the feature normalization.
+            normalizer_.bias_value_ = B;
+            normalizer_.find_normalization(features);
+            auto normalized_features = Features();
+            normalizer_.apply_normalization(features, normalized_features);
+            svm_.mean() = normalizer_.mean();
+            svm_.std_dev() = normalizer_.std_dev();
+
+            // Precompute the squared norm of the instances.
+            auto x_squ = MultiArray<1, double>(Shape1(num_instances));
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                double v = 0.;
+                for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                {
+                    double f = (*it).second;
+                    v += f*f;
+                }
+                x_squ(i) = v;
+            }
+
+            // Initialize alphas and betas.
+            beta_.reshape(Shape1(num_features), 0.);
+            if (alpha_.size() == num_instances)
+            {
+                // The alphas are initialized, so we must create the according betas.
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    {
+                        auto const j = (*it).first;
+                        auto const f = (*it).second;
+                        beta_(j) += alpha_(i) * labels(i) * f;
+                    }
+                }
+            }
+            else
+            {
+                // The alphas are not initialized, so all alphas and betas are 0.
+                alpha_.reshape(Shape1(num_instances), 0.);
+            }
+
+            // Do the SVM loop.
+            auto indices = std::vector<size_t>(num_instances);
+            std::iota(indices.begin(), indices.end(), 0);
+            auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
+            for (size_t t = 0; t < stop.max_t_;)
+            {
+                std::random_shuffle(indices.begin(), indices.end(), rand_int);
+                size_t diff_count = 0;
+                double min_grad = std::numeric_limits<double>::max();
+                double max_grad = std::numeric_limits<double>::lowest();
+                for (size_t i : indices)
+                {
+                    // Compute the gradient.
+                    double v = 0.;
+                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    {
+                        auto const j = (*it).first;
+                        auto const f = (*it).second;
+                        v += f * beta_(j);
+                    }
+                    auto const grad = labels(i) * v - 1;
+
+                    // Update alpha
+                    auto old_alpha = alpha_(i);
+                    alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
+
+                    // Update beta.
+                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    {
+                        auto const j = (*it).first;
+                        auto const f = (*it).second;
+                        beta_(j) += labels(i) * f * (alpha_(i) - old_alpha);
+                    }
+
+                    // Compute the projected gradient (for the stopping criteria).
+                    auto proj_grad = grad;
+                    if (alpha_(i) <= 0)
+                        proj_grad = std::min(grad, 0.);
+                    else if (alpha_(i) >= U)
+                        proj_grad = std::max(grad, 0.);
+                    min_grad = std::min(min_grad, proj_grad);
+                    max_grad = std::max(max_grad, proj_grad);
+
+                    // Update the stopping criteria.
+                    if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
+                    {
+                        ++diff_count;
+                    }
+                    ++t;
+                    if (t >= stop.max_t_)
+                    {
+                        break;
+                    }
+                }
+
+                if (max_grad - min_grad < stop.grad_tol_ ||
+                        diff_count <= stop.max_total_diffs_ ||
+                        diff_count <= stop.max_relative_diffs_ * num_instances)
+                {
+                    break;
+                }
+            }
+        }
+
+    protected:
+
+        SVM & svm_;
+        RandEngine const & randengine_;
+        Normalizer normalizer_;
+
+    };
+
+} // namespace detail
 
 
 
@@ -108,28 +539,50 @@ public:
     }
 
     /// \brief Getter for the alpha vector.
+    MultiArray<1, double> & alpha()
+    {
+        return alpha_;
+    }
+
+    /// \brief Getter for the alpha vector.
     MultiArray<1, double> const & alpha() const
     {
         return alpha_;
     }
 
+    /// \brief Getter for the beta vector.
+    MultiArray<1, double> & beta()
+    {
+        return beta_;
+    }
+
+    /// \brief Getter for the beta vector.
+    MultiArray<1, double> const & beta() const
+    {
+        return beta_;
+    }
+
+    std::vector<double> & mean()
+    {
+        return mean_;
+    }
+
+    std::vector<double> const & mean() const
+    {
+        return mean_;
+    }
+
+    std::vector<double> & std_dev()
+    {
+        return std_dev_;
+    }
+
+    std::vector<double> const & std_dev() const
+    {
+        return std_dev_;
+    }
+
 protected:
-
-    /// \brief Find mean and standard deviation of the given features and save them.
-    /// \param features: the features
-    template <typename FEATURES>
-    void find_normalization(
-            FEATURES const & features
-    );
-
-    /// \brief Apply the current normalization on the given features and add the bias feature.
-    /// \param features_in: the features that shall be normalized
-    /// \param features_out[out]: the normalized features
-    template <typename FEATURES>
-    void apply_normalization(
-            FEATURES const & features_in,
-            MultiArray<2, double> & features_out
-    ) const;
 
     /// \brief The random engine.
     RandEngine const & randengine_;
@@ -144,10 +597,10 @@ protected:
     MultiArray<1, double> beta_;
 
     /// \brief The vector with the mean of each feature dimension of the training data.
-    MultiArray<1, double> mean_;
+    std::vector<double> mean_;
 
     /// \brief The vector with the standard deviation of each feature dimension of the training data.
-    MultiArray<1, double> std_dev_;
+    std::vector<double> std_dev_;
 
     /// \brief Value of the bias feature.
     double B_;
@@ -166,10 +619,6 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
                   "TwoClassSVM::train(): Wrong feature type.");
     static_assert(std::is_convertible<typename LABELS::value_type, LabelType>(),
                   "TwoClassSVM::train(): Wrong label type.");
-
-
-    // TODO: Optimize algorithm for sparse features.
-
 
     size_t const num_instances = features.shape()[0];
     size_t num_features = features.shape()[1]+1; // +1 for the bias feature
@@ -191,105 +640,15 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         return;
     }
 
-    // Translate the labels to +1 and -1.
-    auto label_ids = MultiArray<1, int>(labels.size());
+    // Transform the labels to +1 and -1.
+    typedef MultiArray<1, int> NEWLABELS;
+    auto label_ids = NEWLABELS(labels.size());
     transform_external_labels(labels, label_ids);
 
-    // Normalize the features.
-    auto normalized_features = MultiArray<2, double>(Shape2(num_instances, num_features));
-    find_normalization(features);
-    apply_normalization(features, normalized_features);
-
-    // Precompute the squared norm of the instances.
-    auto x_squ = MultiArray<1, double>(Shape1(num_instances));
-    for (size_t i = 0; i < num_instances; ++i)
-    {
-        double v = 0.;
-        for (size_t j = 0; j < num_features; ++j)
-        {
-            double f = normalized_features(i, j);
-            v += f * f;
-        }
-        x_squ(i) = v;
-    }
-
-    // Initialize alphas and betas.
-    beta_.reshape(Shape1(num_features), 0.);
-    if (alpha_.size() == num_instances)
-    {
-        // The alphas are initialized, so we must create the according betas.
-        for (size_t i = 0; i < num_instances; ++i)
-        {
-            for (size_t j = 0; j < num_features; ++j)
-            {
-                beta_(j) += alpha_(i) * label_ids(i) * normalized_features(i, j);
-            }
-        }
-    }
-    else
-    {
-        // The alphas are not initialized, so all alphas and betas are 0.
-        alpha_.reshape(Shape1(num_instances), 0.);
-    }
-
-    // Do the SVM loop.
-    auto indices = std::vector<size_t>(num_instances);
-    std::iota(indices.begin(), indices.end(), 0);
-    auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
-    for (size_t t = 0; t < stop.max_t_;)
-    {
-        std::random_shuffle(indices.begin(), indices.end(), rand_int);
-        size_t diff_count = 0;
-        double min_grad = std::numeric_limits<double>::max();
-        double max_grad = std::numeric_limits<double>::lowest();
-        for (size_t i : indices)
-        {
-            // Compute the gradient.
-            double v = 0.;
-            for (size_t j = 0; j < num_features; ++j)
-            {
-                v += normalized_features(i, j) * beta_(j);
-            }
-            auto const grad = label_ids(i) * v - 1;
-
-            // Update alpha
-            auto old_alpha = alpha_(i);
-            alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
-
-            // Update beta.
-            for (size_t j = 0; j < num_features; ++j)
-            {
-                beta_(j) += label_ids(i) * normalized_features(i, j) * (alpha_(i) - old_alpha);
-            }
-
-            // Compute the projected gradient (for the stopping criteria).
-            auto proj_grad = grad;
-            if (alpha_(i) <= 0)
-                proj_grad = std::min(grad, 0.);
-            else if (alpha_(i) >= U)
-                proj_grad = std::max(grad, 0.);
-            min_grad = std::min(min_grad, proj_grad);
-            max_grad = std::max(max_grad, proj_grad);
-
-            // Update the stopping criteria.
-            if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
-            {
-                ++diff_count;
-            }
-            ++t;
-            if (t >= stop.max_t_)
-            {
-                break;
-            }
-        }
-
-        if (max_grad - min_grad < stop.grad_tol_ ||
-                diff_count <= stop.max_total_diffs_ ||
-                diff_count <= stop.max_relative_diffs_ * num_instances)
-        {
-            break;
-        }
-    }
+    // Call the train functor.
+    typedef detail::TwoClassSVMTrainFunctor<TwoClassSVM, FEATURES, NEWLABELS> TrainFunctor;
+    TrainFunctor train_functor(*this, randengine_);
+    train_functor(features, label_ids, U, B, stop);
 }
 
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
@@ -307,6 +666,8 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     vigra_precondition(features.shape()[1]+1 == beta_.size(),
                        "TwoClassSVM::predict(): Wrong number of features.");
 
+    typedef detail::NormalizeFunctor<FEATURES, MultiArray<2, double> > Normalizer;
+
     size_t const num_instances = features.shape()[0];
     size_t const num_features = features.shape()[1]+1;
 
@@ -321,8 +682,9 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     }
 
     // If two classes were found in training, we must do the "real" SVM prediction.
-    auto normalized_features = MultiArray<2, double>(Shape2(num_instances, num_features));
-    apply_normalization(features, normalized_features);
+    auto normalizer = Normalizer(B_, mean_, std_dev_);
+    auto normalized_features = MultiArray<2, double>();
+    normalizer.apply_normalization(features, normalized_features);
     for (size_t i = 0; i < num_instances; ++i)
     {
         double v = 0;
@@ -355,74 +717,6 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::transform_external_labels(
     for (size_t i = 0; i < labels_in.size(); ++i)
     {
         labels_out(i) = label_ids[labels_in(i)];
-    }
-}
-
-template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
-template <typename FEATURES>
-void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::find_normalization(
-        FEATURES const & features
-){
-    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
-                  "TwoClassSVM::find_normalization(): Wrong feature type.");
-
-    size_t const num_instances = features.shape()[0];
-    size_t const num_features = features.shape()[1];
-
-    // Find the mean.
-    mean_.reshape(Shape1(num_features), 0.);
-    for (size_t j = 0; j < num_features; ++j)
-    {
-        for (size_t i = 0; i < num_instances; ++i)
-        {
-            mean_[j] += features(i, j);
-        }
-        mean_[j] /= num_instances;
-    }
-
-    // Find the standard deviation.
-    std_dev_.reshape(Shape1(num_features), 0.);
-    for (size_t j = 0; j < num_features; ++j)
-    {
-        for (size_t i = 0; i < num_instances; ++i)
-        {
-            double v = features(i, j) - mean_[j];
-            std_dev_[j] += v*v;
-        }
-        std_dev_[j] = std::sqrt(std_dev_[j] / (num_instances-1.));
-        if (std_dev_[j] == 0)
-        {
-            std_dev_[j] = 1e-6;
-        }
-    }
-}
-
-template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
-template <typename FEATURES>
-void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::apply_normalization(
-        FEATURES const & features_in,
-        MultiArray<2, double> & features_out
-) const {
-    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
-                  "TwoClassSVM::normalize(): Wrong feature type.");
-
-    size_t const num_instances = features_in.shape()[0];
-    size_t const num_features = features_in.shape()[1];
-
-    // Normalize the data.
-    features_out.reshape(Shape2(num_instances, num_features+1));
-    for (size_t j = 0; j < num_features; ++j)
-    {
-        for (size_t i = 0; i < num_instances; ++i)
-        {
-            features_out(i, j) = (features_in(i, j) - mean_[j]) / std_dev_[j];
-        }
-    }
-
-    // Add the bias feature.
-    for (size_t i = 0; i < num_instances; ++i)
-    {
-        features_out(i, num_features) = B_;
     }
 }
 

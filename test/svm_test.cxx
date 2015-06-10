@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <vigra/svm.hxx>
+#include <vigra/feature_getter.hxx>
 #include "data_utility.hxx"
 
 void test_svm()
@@ -84,8 +85,8 @@ void test_svm()
 
         // Train a SVM.
         SVM::StoppingCriteria stop;
-//        stop.max_relative_diffs_ = 0.02;
-        stop.grad_tol_ = 0.001;
+        stop.max_relative_diffs_ = 0.02;
+//        stop.grad_tol_ = 0.001;
         SVM svm;
         svm.train(train_x, train_y, 1.0, 1.5, stop);
 
@@ -104,6 +105,53 @@ void test_svm()
     }
 
     std::cout << "finished test_svm()" << std::endl;
+}
+
+void test_sparse_svm()
+{
+    using namespace vigra;
+
+    {
+        std::cout << "Running sparse SVM on MNIST 5 vs 8" << std::endl;
+
+        typedef double FeatureType;
+        typedef UInt8 LabelType;
+        typedef TwoClassSVM<FeatureType, LabelType> SVM;
+
+        // Load the data.
+        std::string train_filename = "/home/philip/data/ml-koethe/train.h5";
+        std::string test_filename = "/home/philip/data/ml-koethe/test.h5";
+        std::vector<LabelType> labels = {5, 8};
+        MultiArray<2, FeatureType> train_x;
+        MultiArray<1, LabelType> train_y;
+        MultiArray<2, FeatureType> test_x;
+        MultiArray<1, LabelType> test_y;
+        load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
+        SparseFeatureGetter<FeatureType> train_features(train_x);
+        SparseFeatureGetter<FeatureType> test_features(test_x);
+
+        // Train a SVM.
+        SVM::StoppingCriteria stop;
+        stop.max_relative_diffs_ = 0.02;
+//        stop.grad_tol_ = 0.001;
+        SVM svm;
+        svm.train(train_features, train_y, 1.0, 1.5, stop);
+
+        // Predict with the SVM.
+        MultiArray<1, LabelType> pred_y(test_y.shape());
+        svm.predict(test_features, pred_y);
+
+        // Count the correct predicted instances.
+        size_t count = 0;
+        for (size_t i = 0; i < test_y.size(); ++i)
+        {
+            if (pred_y(i) == test_y(i))
+                ++count;
+        }
+        std::cout << "Performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+    }
+
+    std::cout << "test_sparse_svm(): Success!" << std::endl;
 }
 
 void test_clustered_svm()
@@ -156,5 +204,6 @@ void test_clustered_svm()
 int main()
 {
 //    test_svm();
-    test_clustered_svm();
+    test_sparse_svm();
+//    test_clustered_svm();
 }
