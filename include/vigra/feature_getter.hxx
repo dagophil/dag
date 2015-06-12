@@ -1,6 +1,7 @@
 #ifndef VIGRA_FEATURE_GETTER_HXX
 #define VIGRA_FEATURE_GETTER_HXX
 
+#include <vigra/multi_array.hxx>
 #include <vector>
 #include <utility>
 
@@ -142,10 +143,12 @@ namespace detail
         typedef FEATURES Features;
         typedef typename Features::value_type value_type;
 
-        SparseFeatureGetterConstNonZeroIter(Features const & features, size_t const i, bool is_end = false)
-            : features_(features),
-              indices_(features_.indices_[i]),
-              values_(features_.values_[i]),
+        SparseFeatureGetterConstNonZeroIter(
+                Features const & features,
+                size_t const i,
+                bool is_end = false
+        )   : indices_(features.indices_[i]),
+              values_(features.values_[i]),
               current_(0),
               i_(i)
         {
@@ -172,12 +175,85 @@ namespace detail
 
     protected:
 
-        Features const & features_;
         std::vector<size_t> const & indices_;
         std::vector<value_type> const & values_;
         size_t current_;
         size_t const i_;
 
+    };
+
+    template <typename FEATURES>
+    class SparseFeatureGetterConstIter
+    {
+    public:
+
+        typedef FEATURES Features;
+        typedef typename Features::value_type value_type;
+
+        SparseFeatureGetterConstIter(
+                Features const & features,
+                size_t const i,
+                bool is_end = false
+        )   : indices_(features.indices_[i]),
+              values_(features.values_[i]),
+              current_(0),
+              next_index_(0),
+              i_(i)
+        {
+            if (!indices_.empty() && indices_.front() == 0)
+            {
+                is_zero_ = false;
+                ++next_index_;
+            }
+            else
+            {
+                is_zero_ = true;
+            }
+            if (is_end)
+            {
+                current_ = features.shape()[1];
+            }
+        }
+
+        SparseFeatureGetterConstIter & operator++()
+        {
+            ++current_;
+            if (current_ == indices_[next_index_])
+            {
+                is_zero_ = false;
+                ++next_index_;
+            }
+            else
+            {
+                is_zero_ = true;
+            }
+        }
+
+        value_type operator*() const
+        {
+            if (is_zero_)
+            {
+                return static_cast<value_type>(0);
+            }
+            else
+            {
+                return values_[next_index_-1];
+            }
+        }
+
+        bool operator!=(SparseFeatureGetterConstIter const & other) const
+        {
+            return i_ != other.i_ || current_ != other.current_;
+        }
+
+    protected:
+
+        std::vector<size_t> const & indices_;
+        std::vector<value_type> const & values_;
+        size_t current_;
+        size_t next_index_;
+        bool is_zero_;
+        size_t const i_;
     };
 
 
@@ -284,10 +360,12 @@ public:
     typedef detail::SparseFeatureGetterProxy<SparseFeatureGetter> Proxy;
     typedef detail::SparseFeatureGetterConstProxy<SparseFeatureGetter> ConstProxy;
     typedef detail::SparseFeatureGetterConstNonZeroIter<SparseFeatureGetter> ConstNonZeroIter;
+    typedef detail::SparseFeatureGetterConstIter<SparseFeatureGetter> ConstIter;
 
     friend Proxy;
     friend ConstProxy;
     friend ConstNonZeroIter;
+    friend ConstIter;
 
     SparseFeatureGetter(Shape2 const & shape = Shape2(0, 0))
         : shape_(shape),
@@ -350,14 +428,39 @@ public:
         return count;
     }
 
-    ConstNonZeroIter begin_instance(size_t const i) const
+    ConstIter begin_instance(size_t const i) const
+    {
+        return ConstIter(*this, i);
+    }
+
+    ConstIter end_instance(size_t const i) const
+    {
+        return ConstIter(*this, i, true);
+    }
+
+    ConstNonZeroIter begin_instance_nonzero(size_t const i) const
     {
         return ConstNonZeroIter(*this, i);
     }
 
-    ConstNonZeroIter end_instance(size_t const i) const
+    ConstNonZeroIter end_instance_nonzero(size_t const i) const
     {
         return ConstNonZeroIter(*this, i, true);
+    }
+
+    /// \brief Insert the value v for feature j of instance i at the end of the internal storage vectors.
+    ///
+    /// \note Precondition: There must not be a non-zero value at (i, k) for all k >= j.
+    void unsafe_insert(size_t const i, size_t const j, value_type const & v)
+    {
+        if (!indices_[i].empty() && indices_[i].back() >= j)
+            throw std::runtime_error("SparseFeatureGetter::unsafe_insert(): The precondition is not fulfilled.");
+
+        if (v != 0)
+        {
+            indices_[i].push_back(j);
+            values_[i].push_back(v);
+        }
     }
 
 protected:

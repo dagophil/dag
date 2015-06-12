@@ -137,6 +137,134 @@ namespace detail
 
     };
 
+    template <typename T>
+    class NormalizeFunctor<SparseFeatureGetter<T>, SparseFeatureGetter<T> >
+    {
+    public:
+
+        typedef double FloatType;
+        typedef SparseFeatureGetter<T> IN;
+        typedef SparseFeatureGetter<T> OUT;
+        typedef T FeatureTypeIn;
+        typedef T FeatureTypeOut;
+
+        static_assert(std::is_convertible<FeatureTypeIn, FloatType>(),
+                      "NormalizeFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<FloatType, FeatureTypeOut>(),
+                      "NormalizeFunctor: Wrong feature type.");
+
+        NormalizeFunctor(FloatType const bias_value = FloatType())
+            : bias_value_(bias_value),
+              mean_(0),
+              std_dev_(0)
+        {}
+
+        NormalizeFunctor(
+                FloatType const bias_value,
+                std::vector<FloatType> const & mean,
+                std::vector<FloatType> const & std_dev
+        )   : bias_value_(bias_value),
+              mean_(mean),
+              std_dev_(std_dev)
+        {}
+
+        void find_normalization(
+                IN const & features
+        ){
+            size_t const num_instances = features.shape()[0];
+            size_t const num_features = features.shape()[1];
+
+            // Find the mean.
+            mean_.resize(num_features, 0.);
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                for (auto it = features.begin_instance_nonzero(i); it != features.end_instance_nonzero(i); ++it)
+                {
+                    auto const j = (*it).first;
+                    auto const f = (*it).second;
+                    mean_[j] += f;
+                }
+            }
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                mean_[j] /= num_instances;
+            }
+
+            // Find the standard deviation.
+            std_dev_.resize(num_features, 0.);
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                for (auto it = features.begin_instance_nonzero(i); it != features.end_instance_nonzero(i); ++it)
+                {
+                    auto const j = (*it).first;
+                    auto const f = (*it).second;
+                    FloatType const v = f - mean_[j];
+                    std_dev_[j] += v*v;
+                }
+            }
+            for (size_t j = 0; j < num_features; ++j)
+            {
+                std_dev_[j] = std::sqrt(std_dev_[j] / (num_instances-1.));
+
+                // Prevent division by zero by adding a small epsilon.
+                if (std_dev_[j] == 0)
+                {
+                    std_dev_[j] = 1e-6;
+                }
+            }
+        }
+
+        void apply_normalization(
+                IN const & features_in,
+                OUT & features_out
+        ) const {
+            size_t const num_instances = features_in.shape()[0];
+            size_t const num_features = features_in.shape()[1];
+
+            // Normalize the data.
+            features_out.reshape(Shape2(num_instances, num_features+1));
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                size_t j = 0;
+                for (auto it = features_in.begin_instance(i); it != features_in.end_instance(i); ++it)
+                {
+                    FeatureTypeOut const v = (*it - mean_[j]) / std_dev_[j];
+                    features_out.unsafe_insert(i, j, v);
+                    ++j;
+                }
+                features_out.unsafe_insert(i, num_features, bias_value_);
+            }
+        }
+
+        std::vector<FloatType> & mean()
+        {
+            return mean_;
+        }
+
+        std::vector<FloatType> const & mean() const
+        {
+            return mean_;
+        }
+
+        std::vector<FloatType> & std_dev()
+        {
+            return std_dev_;
+        }
+
+        std::vector<FloatType> const & std_dev() const
+        {
+            return std_dev_;
+        }
+
+        FloatType bias_value_;
+
+    protected:
+
+        std::vector<FloatType> mean_;
+        std::vector<FloatType> std_dev_;
+
+    };
+
 
 
     template <typename SVM, typename FEATURES, typename LABELS>
@@ -331,17 +459,18 @@ namespace detail
 
             // Find the feature normalization.
             normalizer_.bias_value_ = svm_.options().bias_value_;
+            auto normalized_features = Features();
             if (svm_.options().normalize_)
             {
                 normalizer_.find_normalization(features);
+                normalizer_.apply_normalization(features, normalized_features);
             }
             else
             {
                 normalizer_.mean().resize(num_features-1, 0.); // num_features-1 since the bias feature is not normalized
                 normalizer_.std_dev().resize(num_features-1, 1.); // num_features-1 since the bias feature is not normalized
+                normalized_features = Features(features);
             }
-            auto normalized_features = Features();
-            normalizer_.apply_normalization(features, normalized_features);
             svm_.mean() = normalizer_.mean();
             svm_.std_dev() = normalizer_.std_dev();
 
@@ -350,7 +479,7 @@ namespace detail
             for (size_t i = 0; i < num_instances; ++i)
             {
                 double v = 0.;
-                for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                for (auto it = normalized_features.begin_instance_nonzero(i); it != normalized_features.end_instance_nonzero(i); ++it)
                 {
                     double f = (*it).second;
                     v += f*f;
@@ -365,7 +494,7 @@ namespace detail
                 // The alphas are initialized, so we must create the according betas.
                 for (size_t i = 0; i < num_instances; ++i)
                 {
-                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    for (auto it = normalized_features.begin_instance_nonzero(i); it != normalized_features.end_instance_nonzero(i); ++it)
                     {
                         auto const j = (*it).first;
                         auto const f = (*it).second;
@@ -393,7 +522,7 @@ namespace detail
                 {
                     // Compute the gradient.
                     double v = 0.;
-                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    for (auto it = normalized_features.begin_instance_nonzero(i); it != normalized_features.end_instance_nonzero(i); ++it)
                     {
                         auto const j = (*it).first;
                         auto const f = (*it).second;
@@ -406,7 +535,7 @@ namespace detail
                     alpha_(i) = std::max(0., std::min(svm_.options().U_, alpha_(i) - grad/x_squ(i)));
 
                     // Update beta.
-                    for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
+                    for (auto it = normalized_features.begin_instance_nonzero(i); it != normalized_features.end_instance_nonzero(i); ++it)
                     {
                         auto const j = (*it).first;
                         auto const f = (*it).second;

@@ -976,17 +976,13 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         }
     }
 
-    // Create the SVM options.
+    // Train the SVM.
     // TODO: Use early stopping criteria.
     SVM::Options opt;
     opt.normalize_ = false;
     opt.bias_value_ = 0.;
-
-    // Train the SVM.
-    MultiArray<1, size_t> svm_labels(labels.size());
-    rf_.transform_external_labels(labels, svm_labels);
     SVM svm(opt);
-    svm.train(svm_features, svm_labels);
+    svm.train(svm_features, labels);
 
     // Save the produced leaf weights.
     auto const & beta = svm.beta();

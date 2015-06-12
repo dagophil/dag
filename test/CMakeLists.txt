@@ -27,3 +27,7 @@ target_link_libraries(svm_test
 add_executable(kmeans_test
     kmeans_test.cxx
 )
+
+add_executable(feature_getter_test
+    feature_getter_test.cxx
+)

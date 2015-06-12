@@ -8,58 +8,6 @@
 
 
 
-void test_featuregetter()
-{
-    using namespace vigra;
-
-    {
-        SparseFeatureGetter<int> features(Shape2(2, 3));
-        features(0, 1) = 23;
-        features(1, 1) = 15;
-        features(1, 2) = 10;
-
-        std::vector<int> expected {
-            0, 0, 23, 15, 0, 10
-        };
-
-        std::vector<int> feats;
-        for (size_t y = 0; y < features.shape()[1]; ++y)
-        {
-            for (size_t x = 0; x < features.shape()[0]; ++x)
-            {
-                feats.push_back(features(x, y));
-            }
-        }
-        vigra_assert(feats == expected, "Error in SparseFeatureGetter.");
-    }
-
-    {
-        MultiArray<2, int> feature_array(Shape2(2, 3), 0);
-        feature_array(0, 1) = 23;
-        feature_array(1, 1) = 15;
-        feature_array(1, 2) = 10;
-        SparseFeatureGetter<int> features(feature_array);
-
-        std::vector<int> expected {
-            0, 0, 23, 15, 0, 10
-        };
-
-        std::vector<int> feats;
-        for (size_t y = 0; y < features.shape()[1]; ++y)
-        {
-            for (size_t x = 0; x < features.shape()[0]; ++x)
-            {
-                feats.push_back(features(x, y));
-            }
-        }
-        vigra_assert(feats == expected, "Error in SparseFeatureGetter.");
-    }
-
-    std::cout << "test_featuregetter(): Success!" << std::endl;
-}
-
-
-
 void test_randomforest0()
 {
     using namespace vigra;
@@ -246,7 +194,6 @@ void test_globallyrefinedrf()
 
 int main()
 {
-//    test_featuregetter();
 //    test_randomforest0();
     test_globallyrefinedrf();
 }
