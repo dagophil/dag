@@ -278,7 +278,8 @@ namespace detail
         typedef typename SVM::RandEngine RandEngine;
         typedef FEATURES Features;
         typedef LABELS Labels;
-        typedef NormalizeFunctor<Features, MultiArray<2, double> > Normalizer;
+        typedef MultiArray<2, double> NormalizedType;
+        typedef NormalizeFunctor<Features, NormalizedType > Normalizer;
 
         static_assert(std::is_convertible<typename Features::value_type, FeatureType>(),
                       "TwoClassSVMTrainFunctor: Wrong feature type.");
@@ -305,6 +306,7 @@ namespace detail
 
             // Find the feature normalization.
             normalizer_.bias_value_ = svm_.options().bias_value_;
+            auto normalized_features = NormalizedType();
             if (svm_.options().normalize_)
             {
                 normalizer_.find_normalization(features);
@@ -314,7 +316,6 @@ namespace detail
                 normalizer_.mean().resize(num_features-1, 0.); // num_features-1 since the bias feature is never normalized
                 normalizer_.std_dev().resize(num_features-1, 1.); // num_features-1 since the bias feature is never normalized
             }
-            auto normalized_features = MultiArray<2, double>();
             normalizer_.apply_normalization(features, normalized_features);
             svm_.mean() = normalizer_.mean();
             svm_.std_dev() = normalizer_.std_dev();
@@ -580,6 +581,157 @@ namespace detail
 
     };
 
+
+
+    template <typename SVM, typename FEATURES, typename LABELS>
+    class TwoClassSVMPredictFunctor
+    {
+    public:
+
+        typedef typename SVM::Options Options;
+        typedef typename SVM::FeatureType FeatureType;
+        typedef typename SVM::LabelType LabelType;
+        typedef FEATURES Features;
+        typedef LABELS Labels;
+        typedef MultiArray<2, double> NormalizedType;
+        typedef NormalizeFunctor<Features, NormalizedType > Normalizer;
+
+        static_assert(std::is_convertible<typename Features::value_type, FeatureType>(),
+                      "TwoClassSVMTrainFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<typename Labels::value_type, LabelType>(),
+                      "TwoClassSVMTrainFunctor: Wrong label type.");
+
+        TwoClassSVMPredictFunctor(
+                SVM const & svm,
+                std::vector<LabelType> const & distinct_labels
+        )   : svm_(svm),
+              distinct_labels_(distinct_labels)
+        {}
+
+        void operator()(
+                Features const & features,
+                Labels & labels
+        ) const {
+            vigra_precondition(distinct_labels_.size() == 1 || distinct_labels_.size() == 2,
+                               "TwoClassSVMPredictFunctor::operator(): Number of labels found in training must be 1 or 2.");
+            vigra_precondition(features.shape()[1]+1 == svm_.beta().size(),
+                               "TwoClassSVMPredictFunctor::operator(): Wrong number of features.");
+
+            size_t const num_instances = features.shape()[0];
+            size_t const num_features = features.shape()[1]+1;
+
+            // If only one class was found in training, always predict this class.
+            if (distinct_labels_.size() == 1)
+            {
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    labels(i) = distinct_labels_[0];
+                }
+                return;
+            }
+
+            // If two classes were found in training, we must do the "real" SVM prediction.
+            auto normalizer = Normalizer(svm_.options().bias_value_, svm_.mean(), svm_.std_dev());
+            auto normalized_features = NormalizedType();
+            normalizer.apply_normalization(features, normalized_features);
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                double v = 0;
+                for (size_t j = 0; j < num_features; ++j)
+                {
+                    v += normalized_features(i, j) * svm_.beta()(j);
+                }
+                size_t index = (v >= 0) ? 0 : 1; // if v >= 0 then we use label +1, which has index 0 in distinct_labels_, else we use the label with index 1
+                labels(i) = distinct_labels_[index];
+            }
+        }
+
+    protected:
+
+        SVM const & svm_;
+        std::vector<LabelType> const & distinct_labels_;
+    };
+
+
+
+    template <typename SVM, typename T, typename LABELS>
+    class TwoClassSVMPredictFunctor<SVM, SparseFeatureGetter<T>, LABELS>
+    {
+    public:
+
+        typedef typename SVM::Options Options;
+        typedef typename SVM::FeatureType FeatureType;
+        typedef typename SVM::LabelType LabelType;
+        typedef SparseFeatureGetter<T> Features;
+        typedef LABELS Labels;
+        typedef NormalizeFunctor<Features, Features> Normalizer;
+
+        static_assert(std::is_convertible<typename Features::value_type, FeatureType>(),
+                      "TwoClassSVMTrainFunctor: Wrong feature type.");
+        static_assert(std::is_convertible<typename Labels::value_type, LabelType>(),
+                      "TwoClassSVMTrainFunctor: Wrong label type.");
+
+        TwoClassSVMPredictFunctor(
+                SVM const & svm,
+                std::vector<LabelType> const & distinct_labels
+        )   : svm_(svm),
+              distinct_labels_(distinct_labels)
+        {}
+
+        void operator()(
+                Features const & features,
+                Labels & labels
+        ) const {
+            vigra_precondition(distinct_labels_.size() == 1 || distinct_labels_.size() == 2,
+                               "TwoClassSVMPredictFunctor::operator(): Number of labels found in training must be 1 or 2.");
+            vigra_precondition(features.shape()[1]+1 == svm_.beta().size(),
+                               "TwoClassSVMPredictFunctor::operator(): Wrong number of features.");
+
+            size_t const num_instances = features.shape()[0];
+            size_t const num_features = features.shape()[1]+1;
+
+            // If only one class was found in training, always predict this class.
+            if (distinct_labels_.size() == 1)
+            {
+                for (size_t i = 0; i < num_instances; ++i)
+                {
+                    labels(i) = distinct_labels_[0];
+                }
+                return;
+            }
+
+            // If two classes were found in training, we must do the "real" SVM prediction.
+            auto normalizer = Normalizer(svm_.options().bias_value_, svm_.mean(), svm_.std_dev());
+            auto normalized_features = Features();
+            if (svm_.options().normalize_)
+            {
+                normalizer.apply_normalization(features, normalized_features);
+            }
+            else
+            {
+                normalized_features = Features(features);
+            }
+            for (size_t i = 0; i < num_instances; ++i)
+            {
+                double v = 0;
+                for (auto it = normalized_features.begin_instance_nonzero(i); it != normalized_features.end_instance_nonzero(i); ++it)
+                {
+                    auto const j = (*it).first;
+                    auto const f = (*it).second;
+                    v += f * svm_.beta()(j);
+                }
+                size_t index = (v >= 0) ? 0 : 1; // if v >= 0 then we use label +1, which has index 0 in distinct_labels_, else we use the label with index 1
+                labels(i) = distinct_labels_[index];
+            }
+        }
+
+    protected:
+
+        SVM const & svm_;
+        std::vector<LabelType> const & distinct_labels_;
+    };
+
+
 } // namespace detail
 
 
@@ -807,44 +959,10 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
         FEATURES const & features,
         LABELS & labels
 ) const {
-    static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
-                  "TwoClassSVM::predict(): Wrong feature type.");
-    static_assert(std::is_convertible<LabelType, typename LABELS::value_type>(),
-                  "TwoClassSVM::predict(): Wrong label type.");
-    vigra_precondition(distinct_labels_.size() == 1 || distinct_labels_.size() == 2,
-                       "TwoClassSVM::predict(): Number of labels found in training must be 1 or 2.");
-    vigra_precondition(features.shape()[1]+1 == beta_.size(),
-                       "TwoClassSVM::predict(): Wrong number of features.");
-
-    typedef detail::NormalizeFunctor<FEATURES, MultiArray<2, double> > Normalizer;
-
-    size_t const num_instances = features.shape()[0];
-    size_t const num_features = features.shape()[1]+1;
-
-    // If only one class was found in training, always predict this class.
-    if (distinct_labels_.size() == 1)
-    {
-        for (size_t i = 0; i < num_instances; ++i)
-        {
-            labels(i) = distinct_labels_[0];
-        }
-        return;
-    }
-
-    // If two classes were found in training, we must do the "real" SVM prediction.
-    auto normalizer = Normalizer(options_.bias_value_, mean_, std_dev_);
-    auto normalized_features = MultiArray<2, double>();
-    normalizer.apply_normalization(features, normalized_features);
-    for (size_t i = 0; i < num_instances; ++i)
-    {
-        double v = 0;
-        for (size_t j = 0; j < num_features; ++j)
-        {
-            v += normalized_features(i, j) * beta_(j);
-        }
-        size_t index = (v >= 0) ? 0 : 1; // if v >= 0 then we use label +1, which has index 0 in distinct_labels_, else we use the label with index 1
-        labels(i) = distinct_labels_[index];
-    }
+    // Call the predict functor.
+    typedef detail::TwoClassSVMPredictFunctor<TwoClassSVM, FEATURES, LABELS> PredictFunctor;
+    PredictFunctor predict_functor(*this, distinct_labels_);
+    predict_functor(features, labels);
 }
 
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>

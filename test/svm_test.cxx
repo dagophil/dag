@@ -203,7 +203,7 @@ void test_clustered_svm()
 
 int main()
 {
-//    test_svm();
+    test_svm();
     test_sparse_svm();
 //    test_clustered_svm();
 }
