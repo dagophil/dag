@@ -900,7 +900,16 @@ public:
     typedef typename RandomForest::FeatureType FeatureType;
     typedef typename RandomForest::LabelType LabelType;
     typedef typename RandomForest::Tree Tree;
-    typedef ConstForestAdaptor<typename Tree::Graph> ForestAdaptor;
+    typedef typename Tree::Graph TreeGraph;
+    typedef typename Tree::Node TreeNode;
+
+    typedef ConstForestAdaptor<TreeGraph> ForestAdaptor;
+    typedef typename ForestAdaptor::Node Node;
+
+    typedef TwoClassSVM<UInt8, size_t> SVM;
+
+    template <typename T>
+    using NodeMap = typename ForestAdaptor::template NodeMap<T>;
 
     GloballyRefinedRandomForest(RANDOMFOREST const & rf)
         : rf_(rf)
@@ -924,7 +933,7 @@ protected:
 
     ForestAdaptor rf_adaptor_;
 
-    MultiArray<2, double> weights_;
+    NodeMap<double> svm_weights_;
 
 };
 
@@ -942,33 +951,13 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     vigra_precondition(rf_.num_classes() == 2,
                        "GloballyRefinedRandomForest::train(): Curently only implemented for binary random forests.");
 
-    typedef typename Tree::Graph TreeGraph;
-    typedef typename TreeGraph::Node TreeNode;
-    typedef typename Tree:: template NodeMap<std::vector<double> > ProbabilityMap;
-    typedef typename ForestAdaptor::Node Node;
-
     // Create an adaptor for the graph structure and the property maps.
     std::vector<TreeGraph> tree_graphs;
-    std::vector<ProbabilityMap> tree_prob_maps;
     for (Tree const & tree : rf_.trees())
     {
         tree_graphs.push_back(tree.get_graph());
-        tree_prob_maps.push_back(tree.label_probs());
     }
     rf_adaptor_.set_forest(tree_graphs);
-    auto label_probs = rf_adaptor_.merge_node_maps(tree_prob_maps);
-
-    // Create the weight matrix.
-    weights_.reshape(Shape2(rf_adaptor_.numLeaves(), rf_.num_classes()));
-    for (size_t i = 0; i < rf_adaptor_.numLeaves(); ++i)
-    {
-        Node node = rf_adaptor_.getLeafNode(i);
-        auto probs = label_probs[node];
-        for (size_t j = 0; j < probs.size(); ++j)
-        {
-            weights_(i, j) = probs[j];
-        }
-    }
 
     // Get the leaf nodes of the training instances.
     MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());
@@ -987,14 +976,33 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         }
     }
 
+    // Create the SVM options.
+    // TODO: Use early stopping criteria.
+    SVM::Options opt;
+    opt.normalize_ = false;
+    opt.bias_value_ = 0.;
+
     // Train the SVM.
     MultiArray<1, size_t> svm_labels(labels.size());
     rf_.transform_external_labels(labels, svm_labels);
-    TwoClassSVM<UInt8, size_t> svm;
+    SVM svm(opt);
     svm.train(svm_features, svm_labels);
 
+    // Save the produced leaf weights.
+    auto const & beta = svm.beta();
+    for (size_t i = 0; i < beta.size(); ++i)
+    {
+        Node n = rf_adaptor_.getLeafNode(i);
+        svm_weights_[n] = beta(i);
+    }
+}
 
-
+template <typename RANDOMFOREST>
+template <typename FEATURES, typename LABELS>
+void GloballyRefinedRandomForest<RANDOMFOREST>::predict(
+        FEATURES const & features,
+        LABELS & pred_y
+) const {
 
 }
 

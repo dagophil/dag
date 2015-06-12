@@ -193,7 +193,7 @@ void test_globallyrefinedrf()
         Features train_feats(train_x);
         Labels train_labels(train_y);
         rf.train<Features, Labels, Sampler, Termination, SplitFunctor>(
-                    train_feats, train_labels, 8
+                    train_feats, train_labels, 8, 1
         );
 
         // Predict on the test set (for comparison).
@@ -220,6 +220,25 @@ void test_globallyrefinedrf()
         GloballyRefinedRandomForest<RandomForest> grf(rf);
         grf.train(train_feats, train_labels);
         std::cout << "Done with refinement." << std::endl;
+
+        // Predict on the test set.
+        {
+            std::cout << "Predicting" << std::endl;
+
+            // Predict using the forest.
+            MultiArray<1, LabelType> pred_y(test_y.shape());
+            Features test_feats(test_x);
+            grf.predict(test_feats, pred_y);
+
+            // Count the correct predicted instances.
+            size_t count = 0;
+            for (size_t i = 0; i < test_y.size(); ++i)
+            {
+                if (pred_y[i] == test_y[i])
+                    ++count;
+            }
+            std::cout << "RF performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+        }
     }
 }
 

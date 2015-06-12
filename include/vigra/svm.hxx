@@ -168,9 +168,6 @@ namespace detail
                 Features const & features,
                 Labels const & labels
         ){
-            // TODO: Remove output.
-            std::cout << "Doing non sparse SVM algorithm." << std::endl;
-
             size_t const num_instances = features.shape()[0];
             size_t num_features = features.shape()[1]+1; // +1 for the bias feature
 
@@ -179,7 +176,7 @@ namespace detail
             auto & beta_ = svm_.beta();
 
             // Find the feature normalization.
-            normalizer_.bias_value_ = svm_.options().B_;
+            normalizer_.bias_value_ = svm_.options().bias_value_;
             if (svm_.options().normalize_)
             {
                 normalizer_.find_normalization(features);
@@ -333,7 +330,7 @@ namespace detail
             auto & beta_ = svm_.beta();
 
             // Find the feature normalization.
-            normalizer_.bias_value_ = svm_.options().B_;
+            normalizer_.bias_value_ = svm_.options().bias_value_;
             if (svm_.options().normalize_)
             {
                 normalizer_.find_normalization(features);
@@ -472,7 +469,7 @@ public:
     {
         explicit Options(
                 double const U = 1.0,
-                double const B = 1.5,
+                double const bias_value = 1.5,
                 bool const normalize = true,
                 double const alpha_tol = 0.0001,
                 size_t const max_total_diffs = 0,
@@ -480,7 +477,7 @@ public:
                 double const grad_tol = 0.0001,
                 size_t const max_t = std::numeric_limits<size_t>::max()
         )   : U_(U),
-              B_(B),
+              bias_value_(bias_value),
               normalize_(normalize),
               alpha_tol_(alpha_tol),
               max_total_diffs_(max_total_diffs),
@@ -496,7 +493,7 @@ public:
         double U_;
 
         // value of the bias feature
-        double B_;
+        double bias_value_;
 
         // if true, the features are normalized before doing the SVM algorithm
         bool normalize_;
@@ -706,7 +703,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     }
 
     // If two classes were found in training, we must do the "real" SVM prediction.
-    auto normalizer = Normalizer(options_.B_, mean_, std_dev_);
+    auto normalizer = Normalizer(options_.bias_value_, mean_, std_dev_);
     auto normalized_features = MultiArray<2, double>();
     normalizer.apply_normalization(features, normalized_features);
     for (size_t i = 0; i < num_instances; ++i)
