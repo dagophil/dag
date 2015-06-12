@@ -325,6 +325,11 @@ public:
         return shape_;
     }
 
+    size_t const size() const
+    {
+        return shape_[0]*shape_[1];
+    }
+
     Proxy operator()(size_t const i, size_t const j)
     {
         return Proxy(*this, i, j);

@@ -144,7 +144,7 @@ namespace detail
     {
     public:
 
-        typedef typename SVM::StoppingCriteria StoppingCriteria;
+        typedef typename SVM::Options Options;
         typedef typename SVM::FeatureType FeatureType;
         typedef typename SVM::LabelType LabelType;
         typedef typename SVM::RandEngine RandEngine;
@@ -166,10 +166,7 @@ namespace detail
 
         void operator()(
                 Features const & features,
-                Labels const & labels,
-                double const U,
-                double const B,
-                StoppingCriteria const & stop
+                Labels const & labels
         ){
             // TODO: Remove output.
             std::cout << "Doing non sparse SVM algorithm." << std::endl;
@@ -182,8 +179,16 @@ namespace detail
             auto & beta_ = svm_.beta();
 
             // Find the feature normalization.
-            normalizer_.bias_value_ = B;
-            normalizer_.find_normalization(features);
+            normalizer_.bias_value_ = svm_.options().B_;
+            if (svm_.options().normalize_)
+            {
+                normalizer_.find_normalization(features);
+            }
+            else
+            {
+                normalizer_.mean().resize(num_features-1, 0.); // num_features-1 since the bias feature is never normalized
+                normalizer_.std_dev().resize(num_features-1, 1.); // num_features-1 since the bias feature is never normalized
+            }
             auto normalized_features = MultiArray<2, double>();
             normalizer_.apply_normalization(features, normalized_features);
             svm_.mean() = normalizer_.mean();
@@ -225,7 +230,7 @@ namespace detail
             auto indices = std::vector<size_t>(num_instances);
             std::iota(indices.begin(), indices.end(), 0);
             auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
-            for (size_t t = 0; t < stop.max_t_;)
+            for (size_t t = 0; t < svm_.options().max_t_;)
             {
                 std::random_shuffle(indices.begin(), indices.end(), rand_int);
                 size_t diff_count = 0;
@@ -243,7 +248,7 @@ namespace detail
 
                     // Update alpha
                     auto old_alpha = alpha_(i);
-                    alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
+                    alpha_(i) = std::max(0., std::min(svm_.options().U_, alpha_(i) - grad/x_squ(i)));
 
                     // Update beta.
                     for (size_t j = 0; j < num_features; ++j)
@@ -255,26 +260,26 @@ namespace detail
                     auto proj_grad = grad;
                     if (alpha_(i) <= 0)
                         proj_grad = std::min(grad, 0.);
-                    else if (alpha_(i) >= U)
+                    else if (alpha_(i) >= svm_.options().U_)
                         proj_grad = std::max(grad, 0.);
                     min_grad = std::min(min_grad, proj_grad);
                     max_grad = std::max(max_grad, proj_grad);
 
                     // Update the stopping criteria.
-                    if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
+                    if (std::abs(alpha_(i) - old_alpha) > svm_.options().alpha_tol_)
                     {
                         ++diff_count;
                     }
                     ++t;
-                    if (t >= stop.max_t_)
+                    if (t >= svm_.options().max_t_)
                     {
                         break;
                     }
                 }
 
-                if (max_grad - min_grad < stop.grad_tol_ ||
-                        diff_count <= stop.max_total_diffs_ ||
-                        diff_count <= stop.max_relative_diffs_ * num_instances)
+                if (max_grad - min_grad < svm_.options().grad_tol_ ||
+                        diff_count <= svm_.options().max_total_diffs_ ||
+                        diff_count <= svm_.options().max_relative_diffs_ * num_instances)
                 {
                     break;
                 }
@@ -296,7 +301,7 @@ namespace detail
     {
     public:
 
-        typedef typename SVM::StoppingCriteria StoppingCriteria;
+        typedef typename SVM::Options Options;
         typedef typename SVM::FeatureType FeatureType;
         typedef typename SVM::LabelType LabelType;
         typedef typename SVM::RandEngine RandEngine;
@@ -318,10 +323,7 @@ namespace detail
 
         void operator()(
                 Features const & features,
-                Labels const & labels,
-                double const U,
-                double const B,
-                StoppingCriteria const & stop
+                Labels const & labels
         ){
             size_t const num_instances = features.shape()[0];
             size_t num_features = features.shape()[1]+1; // +1 for the bias feature
@@ -331,8 +333,16 @@ namespace detail
             auto & beta_ = svm_.beta();
 
             // Find the feature normalization.
-            normalizer_.bias_value_ = B;
-            normalizer_.find_normalization(features);
+            normalizer_.bias_value_ = svm_.options().B_;
+            if (svm_.options().normalize_)
+            {
+                normalizer_.find_normalization(features);
+            }
+            else
+            {
+                normalizer_.mean().resize(num_features-1, 0.); // num_features-1 since the bias feature is not normalized
+                normalizer_.std_dev().resize(num_features-1, 1.); // num_features-1 since the bias feature is not normalized
+            }
             auto normalized_features = Features();
             normalizer_.apply_normalization(features, normalized_features);
             svm_.mean() = normalizer_.mean();
@@ -376,7 +386,7 @@ namespace detail
             auto indices = std::vector<size_t>(num_instances);
             std::iota(indices.begin(), indices.end(), 0);
             auto rand_int = UniformIntRandomFunctor<RandEngine>(randengine_);
-            for (size_t t = 0; t < stop.max_t_;)
+            for (size_t t = 0; t < svm_.options().max_t_;)
             {
                 std::random_shuffle(indices.begin(), indices.end(), rand_int);
                 size_t diff_count = 0;
@@ -396,7 +406,7 @@ namespace detail
 
                     // Update alpha
                     auto old_alpha = alpha_(i);
-                    alpha_(i) = std::max(0., std::min(U, alpha_(i) - grad/x_squ(i)));
+                    alpha_(i) = std::max(0., std::min(svm_.options().U_, alpha_(i) - grad/x_squ(i)));
 
                     // Update beta.
                     for (auto it = normalized_features.begin_instance(i); it != normalized_features.end_instance(i); ++it)
@@ -410,26 +420,26 @@ namespace detail
                     auto proj_grad = grad;
                     if (alpha_(i) <= 0)
                         proj_grad = std::min(grad, 0.);
-                    else if (alpha_(i) >= U)
+                    else if (alpha_(i) >= svm_.options().U_)
                         proj_grad = std::max(grad, 0.);
                     min_grad = std::min(min_grad, proj_grad);
                     max_grad = std::max(max_grad, proj_grad);
 
                     // Update the stopping criteria.
-                    if (std::abs(alpha_(i) - old_alpha) > stop.alpha_tol_)
+                    if (std::abs(alpha_(i) - old_alpha) > svm_.options().alpha_tol_)
                     {
                         ++diff_count;
                     }
                     ++t;
-                    if (t >= stop.max_t_)
+                    if (t >= svm_.options().max_t_)
                     {
                         break;
                     }
                 }
 
-                if (max_grad - min_grad < stop.grad_tol_ ||
-                        diff_count <= stop.max_total_diffs_ ||
-                        diff_count <= stop.max_relative_diffs_ * num_instances)
+                if (max_grad - min_grad < svm_.options().grad_tol_ ||
+                        diff_count <= svm_.options().max_total_diffs_ ||
+                        diff_count <= svm_.options().max_relative_diffs_ * num_instances)
                 {
                     break;
                 }
@@ -458,39 +468,57 @@ public:
     typedef LABELTYPE LabelType;
     typedef RANDENGINE RandEngine;
 
-    struct StoppingCriteria
+    struct Options
     {
-        explicit StoppingCriteria(
+        explicit Options(
+                double const U = 1.0,
+                double const B = 1.5,
+                bool const normalize = true,
                 double const alpha_tol = 0.0001,
                 size_t const max_total_diffs = 0,
                 double const max_relative_diffs = 0.,
                 double const grad_tol = 0.0001,
                 size_t const max_t = std::numeric_limits<size_t>::max()
-        )   : alpha_tol_(alpha_tol),
+        )   : U_(U),
+              B_(B),
+              normalize_(normalize),
+              alpha_tol_(alpha_tol),
               max_total_diffs_(max_total_diffs),
               max_relative_diffs_(max_relative_diffs),
               grad_tol_(grad_tol),
               max_t_(max_t)
         {
             vigra_precondition(0. <= max_relative_diffs_ && max_relative_diffs_ <= 1.,
-                               "StoppingCriteria(): The relative number of differences must be in the interval [0, 1].");
+                               "Options(): The relative number of differences must be in the interval [0, 1].");
         }
+
+        // upper bound of the alpha values
+        double U_;
+
+        // value of the bias feature
+        double B_;
+
+        // if true, the features are normalized before doing the SVM algorithm
+        bool normalize_;
 
         // count the number of alpha updates that were greater than (or equal to) alpha_tol and
         // stop if count <= max_total_diffs or count <= num_instances*max_relative_diffs
-        double alpha_tol_ = 0.0001;
-        size_t max_total_diffs_ = 0;
-        double max_relative_diffs_ = 0.;
+        double alpha_tol_;
+        size_t max_total_diffs_;
+        double max_relative_diffs_;
 
         // stop if the maximum difference of gradients is less than grad_tol
-        double grad_tol_ = 0.0001;
+        double grad_tol_;
 
         // maximum number of iterations
-        size_t max_t_ = std::numeric_limits<size_t>::max();
+        size_t max_t_;
     };
 
-    TwoClassSVM(RandEngine const & randengine = RandEngine::global())
-        : randengine_(randengine)
+    TwoClassSVM(
+            Options const & options = Options(),
+            RandEngine const & randengine = RandEngine::global()
+    )   : options_(options),
+          randengine_(randengine)
     {}
 
     /// \brief Train the SVM.
@@ -502,10 +530,7 @@ public:
     template <typename FEATURES, typename LABELS>
     void train(
             FEATURES const & features,
-            LABELS const & labels,
-            double const U = 1.0,
-            double const B = 1.5,
-            StoppingCriteria const & stop = StoppingCriteria()
+            LABELS const & labels
     );
 
     /// \brief Predict with the SVM.
@@ -582,6 +607,11 @@ public:
         return std_dev_;
     }
 
+    Options const & options() const
+    {
+        return options_;
+    }
+
 protected:
 
     /// \brief The random engine.
@@ -602,18 +632,15 @@ protected:
     /// \brief The vector with the standard deviation of each feature dimension of the training data.
     std::vector<double> std_dev_;
 
-    /// \brief Value of the bias feature.
-    double B_;
+    /// \brief The SVM options.
+    Options const options_;
 };
 
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
 template <typename FEATURES, typename LABELS>
 void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         FEATURES const & features,
-        LABELS const & labels,
-        double const U,
-        double const B,
-        StoppingCriteria const & stop
+        LABELS const & labels
 ){
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "TwoClassSVM::train(): Wrong feature type.");
@@ -622,9 +649,6 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
 
     size_t const num_instances = features.shape()[0];
     size_t num_features = features.shape()[1]+1; // +1 for the bias feature
-
-    // Save the bias feature.
-    B_ = B;
 
     // Find the distinct labels.
     auto dlabels = std::set<LabelType>(labels.begin(), labels.end());
@@ -648,7 +672,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     // Call the train functor.
     typedef detail::TwoClassSVMTrainFunctor<TwoClassSVM, FEATURES, NEWLABELS> TrainFunctor;
     TrainFunctor train_functor(*this, randengine_);
-    train_functor(features, label_ids, U, B, stop);
+    train_functor(features, label_ids);
 }
 
 template <typename FEATURETYPE, typename LABELTYPE, typename RANDENGINE>
@@ -682,7 +706,7 @@ void TwoClassSVM<FEATURETYPE, LABELTYPE, RANDENGINE>::predict(
     }
 
     // If two classes were found in training, we must do the "real" SVM prediction.
-    auto normalizer = Normalizer(B_, mean_, std_dev_);
+    auto normalizer = Normalizer(options_.B_, mean_, std_dev_);
     auto normalized_features = MultiArray<2, double>();
     normalizer.apply_normalization(features, normalized_features);
     for (size_t i = 0; i < num_instances; ++i)
@@ -731,16 +755,19 @@ public:
     typedef typename SVM::FeatureType FeatureType;
     typedef typename SVM::LabelType LabelType;
     typedef typename SVM::RandEngine RandEngine;
-    typedef typename SVM::StoppingCriteria StoppingCriteria;
+    typedef typename SVM::Options Options;
 
     ClusteredTwoClassSVM(
             size_t const rounds,
             size_t const k,
             size_t const num_clustering_samples,
+            Options const & options = Options(),
             RandEngine const & randengine = RandEngine::global()
     )   : rounds_(rounds),
           k_(k),
           num_clustering_samples_(num_clustering_samples),
+          final_svm_(options),
+          options_(options),
           randengine_(randengine)
     {}
 
@@ -753,10 +780,7 @@ public:
     template <typename FEATURES, typename LABELS>
     void train(
             FEATURES const & features,
-            LABELS const & labels,
-            double const U = 1.0,
-            double const B = 1.5,
-            StoppingCriteria const & stop = StoppingCriteria()
+            LABELS const & labels
     );
 
     /// \brief Predict with the SVM.
@@ -803,16 +827,16 @@ protected:
 
     /// \brief The final SVM that is used for the prediction.
     SVM final_svm_;
+
+    /// \brief The SVM options.
+    Options options_;
 };
 
 template <typename SVM>
 template <typename FEATURES, typename LABELS>
 void ClusteredTwoClassSVM<SVM>::train(
         FEATURES const & features,
-        LABELS const & labels,
-        double const U,
-        double const B,
-        StoppingCriteria const & stop
+        LABELS const & labels
 ){
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "ClusteredTwoClassSVM::train(): Wrong feature type.");
@@ -858,9 +882,9 @@ void ClusteredTwoClassSVM<SVM>::train(
             detail::LineView<MultiArray<1, double> > sub_alpha(alpha_, indices);
 
             // Train the SVM on the sub problem.
-            SVM svm;
+            SVM svm(options_);
             svm.set_alpha(sub_alpha);
-            svm.train(sub_features, sub_labels, U, B, stop);
+            svm.train(sub_features, sub_labels);
 
             // Update the alphas.
             auto const & svm_alpha = svm.alpha();
@@ -886,9 +910,9 @@ void ClusteredTwoClassSVM<SVM>::train(
         detail::LineView<FEATURES> sub_features(features, indices);
         detail::LineView<LABELS> sub_labels(labels, indices);
         detail::LineView<MultiArray<1, double> > sub_alpha(alpha_, indices);
-        SVM svm;
+        SVM svm(options_);
         svm.set_alpha(sub_alpha);
-        svm.train(sub_features, sub_labels, U, B, stop);
+        svm.train(sub_features, sub_labels);
         auto const & svm_alpha = svm.alpha();
         vigra_assert(svm_alpha.size() == indices.size(),
                      "ClusteredTwoClassSVM::train(): Sub SVM has wrong number of alphas.");
@@ -901,7 +925,7 @@ void ClusteredTwoClassSVM<SVM>::train(
     // Run the final SVM on all instances.
     {
         final_svm_.set_alpha(alpha_);
-        final_svm_.train(features, labels, U, B, stop);
+        final_svm_.train(features, labels);
         auto const & svm_alpha = final_svm_.alpha();
         vigra_assert(svm_alpha.size() == num_instances,
                      "ClusteredTwoClassSVM::train(): Final SVM has wrong number of alphas.");

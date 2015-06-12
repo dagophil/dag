@@ -84,11 +84,11 @@ void test_svm()
         load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
 
         // Train a SVM.
-        SVM::StoppingCriteria stop;
-        stop.max_relative_diffs_ = 0.02;
-//        stop.grad_tol_ = 0.001;
-        SVM svm;
-        svm.train(train_x, train_y, 1.0, 1.5, stop);
+        SVM::Options opt;
+        opt.max_relative_diffs_ = 0.02;
+//        opt.grad_tol_ = 0.001;
+        SVM svm(opt);
+        svm.train(train_x, train_y);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());
@@ -131,11 +131,11 @@ void test_sparse_svm()
         SparseFeatureGetter<FeatureType> test_features(test_x);
 
         // Train a SVM.
-        SVM::StoppingCriteria stop;
-        stop.max_relative_diffs_ = 0.02;
-//        stop.grad_tol_ = 0.001;
-        SVM svm;
-        svm.train(train_features, train_y, 1.0, 1.5, stop);
+        SVM::Options opt;
+        opt.max_relative_diffs_ = 0.02;
+//        opt.grad_tol_ = 0.001;
+        SVM svm(opt);
+        svm.train(train_features, train_y);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());
@@ -177,11 +177,11 @@ void test_clustered_svm()
         load_data(train_filename, test_filename, train_x, train_y, test_x, test_y, labels);
 
         // Train a SVM.
-        SVM::StoppingCriteria stop;
-//        stop.max_relative_diffs_ = 0.02;
-        stop.grad_tol_ = 0.001;
-        SVM svm(5, 4, 2000);
-        svm.train(train_x, train_y, 1.0, 1.5, stop);
+        SVM::Options opt;
+//        opt.max_relative_diffs_ = 0.02;
+        opt.grad_tol_ = 0.001;
+        SVM svm(5, 4, 2000, opt);
+        svm.train(train_x, train_y);
 
         // Predict with the SVM.
         MultiArray<1, LabelType> pred_y(test_y.shape());
