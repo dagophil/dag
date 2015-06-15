@@ -1006,7 +1006,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
 
     // Save the produced leaf weights.
-    svm_weights_.resize(rf_.trees().size());
+    svm_weights_.resize(rf_.num_trees());
     auto const & beta = svm.beta();
     for (size_t i = 0; i+1 < beta.size(); ++i) // do not use bias feature -> i+1 in termination condition
     {
