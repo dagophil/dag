@@ -191,6 +191,6 @@ void test_globallyrefinedrf()
 
 int main()
 {
-    test_randomforest0();
-//    test_globallyrefinedrf();
+//    test_randomforest0();
+    test_globallyrefinedrf();
 }

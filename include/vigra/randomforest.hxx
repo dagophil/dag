@@ -949,7 +949,7 @@ protected:
 
     ForestAdaptor rf_adaptor_;
 
-    NodeMap<double> svm_weights_;
+    std::vector<TreeNodeMap<double> > svm_weights_;
 
     std::vector<LabelType> distinct_labels_;
 
@@ -1000,17 +1000,21 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     // TODO: Use early stopping criteria.
     SVM::Options opt;
     opt.normalize_ = false;
-    opt.bias_value_ = 0.;
+    opt.bias_value_ = 0.; // do not use bias feature
     SVM svm(opt);
     svm.train(svm_features, labels);
     distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
 
     // Save the produced leaf weights.
+    svm_weights_.resize(rf_.trees().size());
     auto const & beta = svm.beta();
-    for (size_t i = 0; i < beta.size(); ++i)
+    for (size_t i = 0; i+1 < beta.size(); ++i) // do not use bias feature -> i+1 in termination condition
     {
         Node n = rf_adaptor_.getLeafNode(i);
-        svm_weights_[n] = beta(i);
+        size_t ti;
+        TreeNode tn;
+        rf_adaptor_.forest_to_tree(n, ti, tn);
+        svm_weights_[ti][tn] = beta(i);
     }
 }
 
@@ -1034,8 +1038,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::predict(
         for (size_t j = 0; j < rf_.num_trees(); ++j)
         {
             TreeNode tree_node(leaf_ids(i, j));
-            Node node = rf_adaptor_.tree_to_forest(j, tree_node);
-            v = v + svm_weights_.at(node);
+            v = v + svm_weights_[j].at(tree_node);
         }
         size_t const index = (v >= 0) ? 0 : 1;
         pred_y(i) = distinct_labels_[index];
