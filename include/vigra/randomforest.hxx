@@ -997,7 +997,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     }
 
     // Train an SVM to get leaf weights.
-    MultiArray<1, double> weights;
+    std::vector<double> weights;
     {
         // TODO: Use early stopping criteria.
         SVM::Options opt;
@@ -1006,10 +1006,30 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         SVM svm(opt);
         svm.train(svm_features, labels);
         distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
-        weights = std::move(svm.beta());
+        weights = std::vector<double>(svm.beta().begin(), svm.beta().end()-1); // copy all weights but the bias weight
     }
 
     // Do the pruning.
+    typedef std::tuple<Node, Node, double> Tuple;
+    std::vector<Tuple> pair_weights;
+    for (size_t i = 0; i < weights.size(); ++i)
+    {
+        Node const n0 = rf_adaptor_.getLeafNode(i);
+        Node const n1 = rf_adaptor_.neighbor(n0);
+        if (n0 < n1) // prevent that both (n0, n1) and (n1, n0) occur in the pair vector.
+        {
+            size_t const j = rf_adaptor_.getLeafIndex(n1);
+            double v = weights[i]*weights[i] + weights[j]*weights[j];
+            pair_weights.push_back(std::make_tuple(n0, n1, v));
+        }
+    }
+    std::sort(pair_weights.begin(), pair_weights.end(),
+            [](Tuple const & t0, Tuple const & t1)
+            {
+                return std::get<2>(t0) < std::get<2>(t1);
+            }
+    );
+
 
 
 
@@ -1020,13 +1040,13 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
 
     // Save the produced leaf weights.
     svm_weights_.resize(rf_.num_trees());
-    for (size_t i = 0; i+1 < weights.size(); ++i) // do not use bias feature -> i+1 in termination condition
+    for (size_t i = 0; i < weights.size(); ++i) // do not use bias feature -> i+1 in termination condition
     {
         Node const n = rf_adaptor_.getLeafNode(i);
         size_t ti;
         TreeNode tn;
         rf_adaptor_.forest_to_tree(n, ti, tn);
-        svm_weights_[ti][tn] = weights(i);
+        svm_weights_[ti][tn] = weights[i];
     }
 
 

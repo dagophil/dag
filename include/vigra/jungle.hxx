@@ -14,7 +14,6 @@ namespace vigra
 
 namespace detail
 {
-
     template <typename IDTYPE>
     class IndexNode
     {
@@ -142,6 +141,50 @@ namespace detail
         Map map_;
     };
 
+    template <typename IDTYPE>
+    class ForestIndexNode
+    {
+    public:
+        typedef IDTYPE index_type;
+        ForestIndexNode(lemon::Invalid inv = lemon::INVALID)
+            : tree_index_(0),
+              id_(-1)
+        {}
+        ForestIndexNode(size_t tree_index, index_type const & id)
+            : tree_index_(tree_index),
+              id_(id)
+        {}
+        bool operator!=(ForestIndexNode const & other) const
+        {
+            return tree_index_ != other.tree_index_ || id_ != other.id_;
+        }
+        bool operator==(ForestIndexNode const & other) const
+        {
+            return tree_index_ == other.tree_index_ && id_ == other.id_;
+        }
+        bool operator<(ForestIndexNode const & other) const
+        {
+            if (tree_index_ != other.tree_index_)
+            {
+                return tree_index_ < other.tree_index_;
+            }
+            else
+            {
+                return id_ < other.id_;
+            }
+        }
+        size_t tree_index() const
+        {
+            return tree_index_;
+        }
+        index_type treenode_id() const
+        {
+            return id_;
+        }
+    protected:
+        size_t tree_index_;
+        index_type id_;
+    };
 }
 
 
@@ -666,7 +709,7 @@ public:
 
     typedef TREE Tree;
     typedef Int64 index_type;
-    typedef detail::IndexNode<index_type> Node;
+    typedef detail::ForestIndexNode<index_type> Node;
     typedef typename Tree::Node TreeNode;
     // TODO: Implement the rest of the graph API.
 
@@ -694,12 +737,7 @@ public:
             size_t tree_index,
             TreeNode const & tree_node
     ) const {
-        size_t id = forest_[tree_index]->getLeafIndex(tree_node);
-        for (size_t i = 0; i < tree_index; ++i)
-        {
-            id += forest_[i]->numLeaves();
-        }
-        return Node(id);
+        return Node(tree_index, tree_node.id());
     }
 
     /// \brief Take the give node, find the tree that holds it and return tree index and the tree node.
@@ -708,20 +746,8 @@ public:
             size_t & tree_index,
             TreeNode & tree_node
     ) const {
-        size_t id = node.id();
-        for (tree_index = 0; tree_index < forest_.size(); ++tree_index)
-        {
-            if (id < forest_[tree_index]->numLeaves())
-            {
-                tree_node = TreeNode(forest_[tree_index]->getLeafNode(id));
-                return;
-            }
-            else
-            {
-                id -= forest_[tree_index]->numLeaves();
-            }
-        }
-        vigra_fail("ConstForestAdaptor::forest_to_tree(): The given node is not in the graph.");
+        tree_index = node.tree_index();
+        tree_node = TreeNode(node.treenode_id());
     }
 
     /// \brief Return the number of leaves.
@@ -738,13 +764,39 @@ public:
     /// \brief Return the i-th leaf node in the forest.
     Node getLeafNode(size_t index) const
     {
-        return Node(index);
+        for (size_t tree_index = 0; tree_index < forest_.size(); ++tree_index)
+        {
+            if (index < forest_[tree_index]->numLeaves())
+            {
+                return Node(tree_index, forest_[tree_index]->getLeafNode(index).id());
+            }
+            else
+            {
+                index -= forest_[tree_index]->numLeaves();
+            }
+        }
+        vigra_fail("ForestAdaptor::getLeafNode(): Index out of range.");
     }
 
     /// \brief Return the index of the given node.
     size_t getLeafIndex(Node const & node) const
     {
-        return node.id();
+        size_t index = forest_[node.tree_index()]->getLeafIndex(TreeNode(node.treenode_id()));
+        for (size_t i = 0; i < node.tree_index(); ++i)
+        {
+            index += forest_[i]->numLeaves();
+        }
+        return index;
+    }
+
+    /// \brief Call the neighbor function on the tree.
+    Node neighbor(Node const & node) const
+    {
+        size_t tree_index;
+        TreeNode tree_node;
+        forest_to_tree(node, tree_index, tree_node);
+        TreeNode tree_neighbor = forest_[tree_index]->neighbor(tree_node);
+        return tree_to_forest(tree_index, tree_neighbor);
     }
 
     /// \brief Return a single node map that contains the data of the given tree node maps.
