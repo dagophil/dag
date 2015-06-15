@@ -42,11 +42,11 @@ namespace detail
     template <typename ITER, typename OUTITER>
     void sample_with_replacement(size_t n, ITER begin, ITER end, OUTITER out)
     {
-        size_t num_instances = std::distance(begin, end);
+        size_t const num_instances = std::distance(begin, end);
         UniformIntRandomFunctor<MersenneTwister> rand;
         for (size_t i = 0; i < n; ++i)
         {
-            size_t k = rand(num_instances);
+            size_t const k = rand(num_instances);
             *out = begin[k];
             ++out;
         }
@@ -58,12 +58,12 @@ namespace detail
     {
         typedef typename std::iterator_traits<ITER>::value_type value_type;
 
-        size_t num_instances = std::distance(begin, end);
+        size_t const num_instances = std::distance(begin, end);
         std::vector<value_type> values(begin, end);
         UniformIntRandomFunctor<MersenneTwister> rand;
         for (size_t i = 0; i < n; ++i)
         {
-            size_t k = rand(num_instances-i);
+            size_t const k = rand(num_instances-i);
             *out = values[k];
             ++out;
             values[k] = values[num_instances-i-1];
@@ -490,13 +490,13 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
         node_stack.pop();
 
         // Draw a random sample of the instances.
-        auto instances = instance_ranges_[node];
+        auto const instances = instance_ranges_[node];
         sampler.split_sample(instances.begin, instances.end);
 
         // Check the termination criterion.
         TERMINATION termination_crit;
         LabelType first_label;
-        bool do_split = !termination_crit.stop(instances.begin, instances.end, labels, first_label);
+        bool const do_split = !termination_crit.stop(instances.begin, instances.end, labels, first_label);
         bool split_found = false;
         if (do_split)
         {
@@ -508,8 +508,8 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
             if (split_found)
             {
                 // Add the child nodes to the graph.
-                Node n0 = tree_.addNode();
-                Node n1 = tree_.addNode();
+                Node const n0 = tree_.addNode();
+                Node const n1 = tree_.addNode();
                 tree_.addArc(node, n0);
                 tree_.addArc(node, n1);
                 instance_ranges_[n0] = {instances.begin, split_iter};
@@ -746,7 +746,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
     // Translate the labels to the label ids.
     MultiArray<1, size_t> data_y_id_arr(data_y.shape());
     transform_external_labels(data_y, data_y_id_arr);
-    LabelGetter<size_t> data_y_id(data_y_id_arr);
+    LabelGetter<size_t> const data_y_id(data_y_id_arr);
 
     // Create a named lambda to train a single tree with index i.
     auto train_tree = [this, & data_x, & data_y_id](size_t i) {
@@ -987,9 +987,9 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     {
         for (size_t j = 0; j < rf_.num_trees(); ++j)
         {
-            TreeNode tree_node(leaf_ids(i, j));
-            Node node = rf_adaptor_.tree_to_forest(j, tree_node);
-            size_t node_index = rf_adaptor_.getLeafIndex(node);
+            TreeNode const tree_node(leaf_ids(i, j));
+            Node const node = rf_adaptor_.tree_to_forest(j, tree_node);
+            size_t const node_index = rf_adaptor_.getLeafIndex(node);
             svm_features(i, node_index) = 1;
         }
     }
@@ -1008,7 +1008,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     auto const & beta = svm.beta();
     for (size_t i = 0; i+1 < beta.size(); ++i) // do not use bias feature -> i+1 in termination condition
     {
-        Node n = rf_adaptor_.getLeafNode(i);
+        Node const n = rf_adaptor_.getLeafNode(i);
         size_t ti;
         TreeNode tn;
         rf_adaptor_.forest_to_tree(n, ti, tn);
@@ -1035,7 +1035,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::predict(
         double v = 0.;
         for (size_t j = 0; j < rf_.num_trees(); ++j)
         {
-            TreeNode tree_node(leaf_ids(i, j));
+            TreeNode const tree_node(leaf_ids(i, j));
             v = v + svm_weights_[j].at(tree_node);
         }
         size_t const index = (v >= 0) ? 0 : 1;
