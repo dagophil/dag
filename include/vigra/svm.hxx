@@ -641,7 +641,7 @@ namespace detail
                 {
                     v += normalized_features(i, j) * svm_.beta()(j);
                 }
-                size_t index = (v >= 0) ? 0 : 1; // if v >= 0 then we use label +1, which has index 0 in distinct_labels_, else we use the label with index 1
+                size_t const index = (v >= 0) ? 0 : 1; // if v >= 0 then we use label +1, which has index 0 in distinct_labels_, else we use the label with index 1
                 labels(i) = distinct_labels_[index];
             }
         }
@@ -888,6 +888,11 @@ public:
     Options const & options() const
     {
         return options_;
+    }
+
+    std::vector<LabelType> const & distinct_labels() const
+    {
+        return distinct_labels_;
     }
 
 protected:

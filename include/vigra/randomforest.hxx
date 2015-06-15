@@ -242,15 +242,16 @@ public:
             ITER & split_iter
     ) const {
         auto const num_instances = std::distance(inst_begin, inst_end);
+        auto const num_features = features.shape()[1];
 
         // Get a random subset of the features.
         UniformIntRandomFunctor<RANDENGINE> rand(randengine);
-        size_t const num_feats = std::ceil(std::sqrt(features.num_features()));
-        std::vector<size_t> all_feat_indices(features.num_features());
+        size_t const num_feats = std::ceil(std::sqrt(num_features));
+        std::vector<size_t> all_feat_indices(num_features);
         std::iota(all_feat_indices.begin(), all_feat_indices.end(), 0);
         for (size_t i = 0; i < num_feats; ++i)
         {
-            size_t j = i + (rand(features.num_features()-i));
+            size_t j = i + (rand(num_features-i));
             std::swap(all_feat_indices[i], all_feat_indices[j]);
         }
 
@@ -269,7 +270,12 @@ public:
             auto const feat = all_feat_indices[k];
 
             // Sort the instances according to the current feature.
-            features.sort(feat, inst_begin, inst_end);
+            std::sort(inst_begin, inst_end,
+                    [& features, & feat](size_t i, size_t j)
+                    {
+                        return features(i, feat) < features(j, feat);
+                    }
+            );
 
             // Compute the score of each split.
             scorer.clear_left();
@@ -305,10 +311,10 @@ public:
             return false;
 
         // Separate the data according to the best split.
-        auto const best_features = features.get_features(best_feat);
         split_iter = std::partition(inst_begin, inst_end,
-                [& best_features, & best_split](size_t instance_index){
-                    return best_features[instance_index] < best_split;
+                [& features, & best_feat, & best_split](size_t instance_index)
+                {
+                    return features(instance_index, best_feat) < best_split;
                 }
         );
         return true;
@@ -392,6 +398,12 @@ public:
     Graph const & get_graph() const
     {
         return tree_;
+    }
+
+    /// \brief Return the node splits.
+    NodeMap<Split> const & node_splits() const
+    {
+        return node_splits_;
     }
 
     /// \brief Return the node labels.
@@ -580,21 +592,22 @@ void DecisionTree0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "DecisionTree0::leaf_indices(): Wrong feature type.");
 
-    vigra_precondition(features.num_instances() == indices.size(),
+    size_t const num_instances = features.shape()[0];
+
+    vigra_precondition(num_instances == indices.size(),
                        "DecisionTree0::leaf_indices(): Shape mismatch.");
 
     Node const rootnode = tree_.getRoot();
     vigra_assert(tree_.valid(rootnode), "DecisionTree0::leaf_indices(): The graph has no root node.");
 
-    for (size_t i = 0; i < features.num_instances(); ++i)
+    for (size_t i = 0; i < num_instances; ++i)
     {
-        auto const feats = features.instance_features(i);
         Node node = rootnode;
 
         while (tree_.outDegree(node) > 0)
         {
             auto const & s = node_splits_.at(node);
-            if (feats(s.feature_index) < s.thresh)
+            if (features(i, s.feature_index) < s.thresh)
             {
                 node = tree_.getChild(node, 0);
             }
@@ -856,7 +869,7 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::leaf_ids(
     static_assert(std::is_convertible<typename FEATURES::value_type, FeatureType>(),
                   "RandomForest0::leaf_indices(): Wrong feature type.");
 
-    vigra_precondition(indices.shape() == Shape2(features.num_instances(), dtrees_.size()),
+    vigra_precondition(indices.shape() == Shape2(features.shape()[0], dtrees_.size()),
                        "RandomForest0::leaf_indices(): Shape mismatch.");
 
     for (size_t i = 0; i < dtrees_.size(); ++i)
@@ -911,6 +924,9 @@ public:
     template <typename T>
     using NodeMap = typename ForestAdaptor::template NodeMap<T>;
 
+    template <typename T>
+    using TreeNodeMap = typename Tree::template NodeMap<T>;
+
     GloballyRefinedRandomForest(RANDOMFOREST const & rf)
         : rf_(rf)
     {}
@@ -935,6 +951,8 @@ protected:
 
     NodeMap<double> svm_weights_;
 
+    std::vector<LabelType> distinct_labels_;
+
 };
 
 template <typename RANDOMFOREST>
@@ -951,7 +969,9 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     vigra_precondition(rf_.num_classes() == 2,
                        "GloballyRefinedRandomForest::train(): Curently only implemented for binary random forests.");
 
-    // Create an adaptor for the graph structure and the property maps.
+    size_t const num_instances = features.shape()[0];
+
+    // Create an adaptor for the graph structure and the node splits.
     std::vector<TreeGraph> tree_graphs;
     for (Tree const & tree : rf_.trees())
     {
@@ -960,12 +980,12 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     rf_adaptor_.set_forest(tree_graphs);
 
     // Get the leaf nodes of the training instances.
-    MultiArray<2, size_t> leaf_ids(features.num_instances(), rf_.num_trees());
+    MultiArray<2, size_t> leaf_ids(num_instances, rf_.num_trees());
     rf_.leaf_ids(features, leaf_ids);
 
     // Create the index vectors (= features) for the SVM.
-    SparseFeatureGetter<UInt8> svm_features(Shape2(features.num_instances(), rf_adaptor_.numLeaves()));
-    for (size_t i = 0; i < features.num_instances(); ++i)
+    SparseFeatureGetter<UInt8> svm_features(Shape2(num_instances, rf_adaptor_.numLeaves()));
+    for (size_t i = 0; i < num_instances; ++i)
     {
         for (size_t j = 0; j < rf_.num_trees(); ++j)
         {
@@ -983,6 +1003,7 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     opt.bias_value_ = 0.;
     SVM svm(opt);
     svm.train(svm_features, labels);
+    distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
 
     // Save the produced leaf weights.
     auto const & beta = svm.beta();
@@ -1000,6 +1021,25 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::predict(
         LABELS & pred_y
 ) const {
 
+    size_t const num_instances = features.shape()[0];
+
+    // Get the leaf nodes of the training instances.
+    MultiArray<2, size_t> leaf_ids(num_instances, rf_.num_trees());
+    rf_.leaf_ids(features, leaf_ids);
+
+    // Do the SVM prediction.
+    for (size_t i = 0; i < num_instances; ++i)
+    {
+        double v = 0.;
+        for (size_t j = 0; j < rf_.num_trees(); ++j)
+        {
+            TreeNode tree_node(leaf_ids(i, j));
+            Node node = rf_adaptor_.tree_to_forest(j, tree_node);
+            v = v + svm_weights_.at(node);
+        }
+        size_t const index = (v >= 0) ? 0 : 1;
+        pred_y(i) = distinct_labels_[index];
+    }
 }
 
 
