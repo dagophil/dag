@@ -2,9 +2,18 @@
 #include <vigra/multi_array.hxx>
 #include <vigra/hdf5impex.hxx>
 #include <unordered_set>
+#include <chrono>
 
 #include <vigra/randomforest.hxx>
 #include "data_utility.hxx"
+
+
+
+// TIC TOC macros to measure time.
+std::chrono::steady_clock::time_point start, end;
+double sec;
+#define TIC start = std::chrono::steady_clock::now();
+#define TOC(msg) end = std::chrono::steady_clock::now(); sec = std::chrono::duration<double>(end-start).count(); std::cout << msg << ": " << sec << " seconds" << std::endl;
 
 
 
@@ -90,14 +99,19 @@ void test_randomforest0()
         RandomForest0<FeatureType, LabelType> rf;
         Features train_feats(train_x);
         Labels train_labels(train_y);
+
+        TIC;
         rf.train<Features, Labels, Sampler, Termination, SplitFunctor>(
-                    train_feats, train_labels, 100, 1
+                    train_feats, train_labels, 100
         );
+        TOC("Random forest training");
 
         // Predict using the forest.
         MultiArray<1, LabelType> pred_y(test_y.shape());
         Features test_feats(test_x);
+        TIC;
         rf.predict(test_feats, pred_y);
+        TOC("Random forest prediction");
 
         // Count the correct predicted instances.
         size_t count = 0;
@@ -138,18 +152,19 @@ void test_globallyrefinedrf()
 
         // Train a random forest.
         RandomForest rf;
+        TIC;
         rf.train<MultiArray<2, FeatureType>, MultiArray<1, LabelType>, Sampler, Termination, SplitFunctor>(
                     train_x, train_y, 100
         );
+        TOC("Random forest training")
 
         // Predict on the test set (for comparison).
         {
-            std::cout << "Predicting" << std::endl;
-
-            // Predict using the forest.
             MultiArray<1, LabelType> pred_y(test_y.shape());
             Features test_feats(test_x);
+            TIC;
             rf.predict(test_feats, pred_y);
+            TOC("Random forest prediction");
 
             // Count the correct predicted instances.
             size_t count = 0;
@@ -162,18 +177,18 @@ void test_globallyrefinedrf()
         }
 
         // Train a globally refined random forest.
-        std::cout << "Applying global refinement." << std::endl;
-        GloballyRefinedRandomForest<RandomForest> grf(rf);
-        grf.train(train_x, train_y);
-        std::cout << "Done with refinement." << std::endl;
+        GloballyRefinedRandomForest<RandomForest> grrf(rf);
+        TIC;
+        grrf.train(train_x, train_y);
+        TOC("Global refinement");
 
         // Predict on the test set.
         {
-            std::cout << "Predicting" << std::endl;
-
             // Predict using the forest.
             MultiArray<1, LabelType> pred_y(test_y.shape());
-            grf.predict(test_x, pred_y);
+            TIC;
+            grrf.predict(test_x, pred_y);
+            TOC("Refined random forest prediction");
 
             // Count the correct predicted instances.
             size_t count = 0;
@@ -182,7 +197,7 @@ void test_globallyrefinedrf()
                 if (pred_y[i] == test_y[i])
                     ++count;
             }
-            std::cout << "RF performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
+            std::cout << "GRRF performance: " << (count / ((float) pred_y.size())) << " (" << count << " of " << pred_y.size() << ")" << std::endl;
         }
     }
 }

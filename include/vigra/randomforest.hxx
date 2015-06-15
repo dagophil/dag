@@ -750,8 +750,6 @@ void RandomForest0<FEATURETYPE, LABELTYPE, RANDENGINE>::train(
 
     // Create a named lambda to train a single tree with index i.
     auto train_tree = [this, & data_x, & data_y_id](size_t i) {
-        // TODO: Remove output.
-        std::cout << "training tree " << i << std::endl;
         dtrees_[i].set_num_labels(distinct_labels_.size());
         dtrees_[i].train<FEATURES, LabelGetter<size_t>, SAMPLER, TERMINATION, SPLITFUNCTOR>(data_x, data_y_id);
     };
