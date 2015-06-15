@@ -139,6 +139,13 @@ void test_binary_tree()
         // TODO: Maybe improve this test.
     }
 
+    // Test the neighbor function.
+    {
+        vigra_assert(tree.neighbor(na) == lemon::INVALID && tree.neighbor(nb) == nc &&
+                     tree.neighbor(nc) == nb && tree.neighbor(nd) == ne && tree.neighbor(ne) == nd &&
+                     tree.neighbor(nf) == lemon::INVALID, "Error in BinaryTree::neighbor().");
+    }
+
     std::cout << "test_binary_tree(): Success!" << std::endl;
 }
 

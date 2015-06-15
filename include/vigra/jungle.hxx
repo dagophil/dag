@@ -223,6 +223,9 @@ public:
     /// \brief Return the index i that gives the node with getLeafNode(i).
     size_t getLeafIndex(Node const & node) const;
 
+    /// \brief Return the other child of the parent. Returns lemon::INVALID if node is a root node or if the parent only has one child.
+    Node neighbor(Node const & node) const;
+
 protected:
 
     void makeLeaves() const;
@@ -635,6 +638,22 @@ inline size_t BinaryTree::getLeafIndex(
 ) const {
     makeLeaves();
     return nodes_[node.id()].leaf_index;
+}
+
+inline BinaryTree::Node BinaryTree::neighbor(Node const & node) const
+{
+    index_type const parent_id = nodes_[node.id()].parent;
+    if (parent_id == -1)
+        return lemon::INVALID;
+
+    index_type const left_id = nodes_[parent_id].left_child;
+    index_type const right_id = nodes_[parent_id].right_child;
+    if (left_id == -1 || right_id == -1)
+        return lemon::INVALID;
+    else if (left_id == node.id())
+        return Node(right_id);
+    else
+        return Node(left_id);
 }
 
 
