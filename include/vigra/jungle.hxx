@@ -141,26 +141,26 @@ namespace detail
         Map map_;
     };
 
-    template <typename IDTYPE>
+    template <typename NODETYPE>
     class ForestIndexNode
     {
     public:
-        typedef IDTYPE index_type;
+        typedef NODETYPE Node;
         ForestIndexNode(lemon::Invalid inv = lemon::INVALID)
             : tree_index_(0),
-              id_(-1)
+              tree_node_(lemon::INVALID)
         {}
-        ForestIndexNode(size_t tree_index, index_type const & id)
+        ForestIndexNode(size_t tree_index, Node const & node)
             : tree_index_(tree_index),
-              id_(id)
+              tree_node_(node)
         {}
         bool operator!=(ForestIndexNode const & other) const
         {
-            return tree_index_ != other.tree_index_ || id_ != other.id_;
+            return tree_index_ != other.tree_index_ || tree_node_ != other.tree_node_;
         }
         bool operator==(ForestIndexNode const & other) const
         {
-            return tree_index_ == other.tree_index_ && id_ == other.id_;
+            return tree_index_ == other.tree_index_ && tree_node_ == other.tree_node_;
         }
         bool operator<(ForestIndexNode const & other) const
         {
@@ -170,20 +170,20 @@ namespace detail
             }
             else
             {
-                return id_ < other.id_;
+                return tree_node_ < other.tree_node_;
             }
         }
         size_t tree_index() const
         {
             return tree_index_;
         }
-        index_type treenode_id() const
+        Node tree_node() const
         {
-            return id_;
+            return tree_node_;
         }
     protected:
         size_t tree_index_;
-        index_type id_;
+        Node tree_node_;
     };
 }
 
@@ -666,7 +666,7 @@ inline void BinaryTree::makeLeaves() const
         leaf_ids_.clear();
         for (size_t i = 0; i < nodes_.size(); ++i)
         {
-            if (outDegree(Node(i)) == 0)
+            if (valid(Node(i)) && outDegree(Node(i)) == 0)
             {
                 leaf_ids_.push_back(i);
                 nodes_[i].leaf_index = leaf_ids_.size()-1;
@@ -680,6 +680,7 @@ inline size_t BinaryTree::getLeafIndex(
         Node const & node
 ) const {
     makeLeaves();
+    vigra_assert(outDegree(node) == 0, "BinaryTree::getLeafIndex(): The given node is no leaf.");
     return nodes_[node.id()].leaf_index;
 }
 
@@ -709,8 +710,8 @@ public:
 
     typedef TREE Tree;
     typedef Int64 index_type;
-    typedef detail::ForestIndexNode<index_type> Node;
     typedef typename Tree::Node TreeNode;
+    typedef detail::ForestIndexNode<TreeNode> Node;
     // TODO: Implement the rest of the graph API.
 
     // TODO: Maybe switch from raw pointers to std::shared_ptr.
@@ -737,7 +738,7 @@ public:
             size_t tree_index,
             TreeNode const & tree_node
     ) const {
-        return Node(tree_index, tree_node.id());
+        return Node(tree_index, tree_node);
     }
 
     /// \brief Take the give node, find the tree that holds it and return tree index and the tree node.
@@ -747,7 +748,27 @@ public:
             TreeNode & tree_node
     ) const {
         tree_index = node.tree_index();
-        tree_node = TreeNode(node.treenode_id());
+        tree_node = node.tree_node();
+    }
+
+    void erase(Node const & node)
+    {
+        forest_[node.tree_index()]->erase(node.tree_node());
+    }
+
+    bool valid(Node const & node) const
+    {
+        return forest_[node.tree_index()]->valid(node.tree_node());
+    }
+
+    size_t outDegree(Node const & node) const
+    {
+        return forest_[node.tree_index()]->outDegree(node.tree_node());
+    }
+
+    Node getParent(Node const & node, size_t i = 0) const
+    {
+        return Node(node.tree_index(), forest_[node.tree_index()]->getParent(node.tree_node(), i));
     }
 
     /// \brief Return the number of leaves.
@@ -768,7 +789,7 @@ public:
         {
             if (index < forest_[tree_index]->numLeaves())
             {
-                return Node(tree_index, forest_[tree_index]->getLeafNode(index).id());
+                return Node(tree_index, forest_[tree_index]->getLeafNode(index));
             }
             else
             {
@@ -781,7 +802,7 @@ public:
     /// \brief Return the index of the given node.
     size_t getLeafIndex(Node const & node) const
     {
-        size_t index = forest_[node.tree_index()]->getLeafIndex(TreeNode(node.treenode_id()));
+        size_t index = forest_[node.tree_index()]->getLeafIndex(node.tree_node());
         for (size_t i = 0; i < node.tree_index(); ++i)
         {
             index += forest_[i]->numLeaves();
