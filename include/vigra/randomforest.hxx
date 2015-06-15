@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <thread>
 #include <stack>
+#include <fstream>
 
 //#include "dagraph.hxx"
 #include "jungle.hxx"
@@ -395,6 +396,12 @@ public:
     }
 
     /// \brief Return the graph structure.
+    Graph & get_graph()
+    {
+        return tree_;
+    }
+
+    /// \brief Return the graph structure.
     Graph const & get_graph() const
     {
         return tree_;
@@ -684,17 +691,6 @@ public:
         return distinct_labels_.size();
     }
 
-    /// \brief Return the graph vector.
-    std::vector<typename Tree::Graph> get_graph() const
-    {
-        std::vector<typename Tree::Graph> graph;
-        for (Tree const & tree : dtrees_)
-        {
-            graph.push_back(tree.get_graph());
-        }
-        return graph;
-    }
-
     /// \brief For each tree return the node ids of the leaves that contain the given instances.
     template <typename FEATURES>
     void leaf_ids(
@@ -914,18 +910,18 @@ public:
     typedef typename Tree::Graph TreeGraph;
     typedef typename Tree::Node TreeNode;
 
-    typedef ConstForestAdaptor<TreeGraph> ForestAdaptor;
-    typedef typename ForestAdaptor::Node Node;
+    typedef ForestAdaptor<TreeGraph> Adaptor;
+    typedef typename Adaptor::Node Node;
 
     typedef TwoClassSVM<UInt8, size_t> SVM;
 
     template <typename T>
-    using NodeMap = typename ForestAdaptor::template NodeMap<T>;
+    using NodeMap = typename Adaptor::template NodeMap<T>;
 
     template <typename T>
     using TreeNodeMap = typename Tree::template NodeMap<T>;
 
-    GloballyRefinedRandomForest(RANDOMFOREST const & rf)
+    GloballyRefinedRandomForest(RANDOMFOREST & rf)
         : rf_(rf)
     {}
 
@@ -943,9 +939,9 @@ public:
 
 protected:
 
-    RandomForest const & rf_;
+    RandomForest & rf_;
 
-    ForestAdaptor rf_adaptor_;
+    Adaptor rf_adaptor_;
 
     std::vector<TreeNodeMap<double> > svm_weights_;
 
@@ -970,50 +966,86 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
     size_t const num_instances = features.shape()[0];
 
     // Create an adaptor for the graph structure and the node splits.
-    std::vector<TreeGraph> tree_graphs;
-    for (Tree const & tree : rf_.trees())
     {
-        tree_graphs.push_back(tree.get_graph());
+        std::vector<TreeGraph*> tree_graphs;
+        for (Tree & tree : rf_.trees())
+        {
+            tree_graphs.push_back(&tree.get_graph());
+        }
+        rf_adaptor_.set_forest(tree_graphs);
     }
-    rf_adaptor_.set_forest(tree_graphs);
-
-    // Get the leaf nodes of the training instances.
-    MultiArray<2, size_t> leaf_ids(num_instances, rf_.num_trees());
-    rf_.leaf_ids(features, leaf_ids);
 
     // Create the index vectors (= features) for the SVM.
     SparseFeatureGetter<UInt8> svm_features(Shape2(num_instances, rf_adaptor_.numLeaves()));
-    for (size_t i = 0; i < num_instances; ++i)
     {
-        for (size_t j = 0; j < rf_.num_trees(); ++j)
+        // Get the leaf nodes of the training instances.
+        MultiArray<2, size_t> leaf_ids(num_instances, rf_.num_trees());
+        rf_.leaf_ids(features, leaf_ids);
+
+        // Put the leaf ids in the feature array.
+        for (size_t i = 0; i < num_instances; ++i)
         {
-            TreeNode const tree_node(leaf_ids(i, j));
-            Node const node = rf_adaptor_.tree_to_forest(j, tree_node);
-            size_t const node_index = rf_adaptor_.getLeafIndex(node);
-            svm_features(i, node_index) = 1;
+            for (size_t j = 0; j < rf_.num_trees(); ++j)
+            {
+                TreeNode const tree_node(leaf_ids(i, j));
+                Node const node = rf_adaptor_.tree_to_forest(j, tree_node);
+                size_t const node_index = rf_adaptor_.getLeafIndex(node);
+                svm_features.unsafe_insert(i, node_index, 1); // The precondition "node_index must be monotonically increasing for fixed i" is fulfilled.
+//                svm_features(i, node_index) = 1;
+            }
         }
     }
 
-    // Train the SVM.
-    // TODO: Use early stopping criteria.
-    SVM::Options opt;
-    opt.normalize_ = false;
-    opt.bias_value_ = 0.; // do not use bias feature
-    SVM svm(opt);
-    svm.train(svm_features, labels);
-    distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
+    // Train an SVM to get leaf weights.
+    MultiArray<1, double> weights;
+    {
+        // TODO: Use early stopping criteria.
+        SVM::Options opt;
+        opt.normalize_ = false;
+        opt.bias_value_ = 0.; // do not use bias feature
+        SVM svm(opt);
+        svm.train(svm_features, labels);
+        distinct_labels_ = std::vector<LabelType>(svm.distinct_labels().begin(), svm.distinct_labels().end());
+        weights = std::move(svm.beta());
+    }
+
+    // Do the pruning.
+
+
+
+
+
+
+
 
     // Save the produced leaf weights.
     svm_weights_.resize(rf_.num_trees());
-    auto const & beta = svm.beta();
-    for (size_t i = 0; i+1 < beta.size(); ++i) // do not use bias feature -> i+1 in termination condition
+    for (size_t i = 0; i+1 < weights.size(); ++i) // do not use bias feature -> i+1 in termination condition
     {
         Node const n = rf_adaptor_.getLeafNode(i);
         size_t ti;
         TreeNode tn;
         rf_adaptor_.forest_to_tree(n, ti, tn);
-        svm_weights_[ti][tn] = beta(i);
+        svm_weights_[ti][tn] = weights(i);
     }
+
+
+
+//    // Save the betas.
+//    {
+//        std::ofstream ofs;
+//        ofs.open("beta.txt");
+
+//        for (size_t i = 0; i+1 < beta.size(); ++i)
+//        {
+//            ofs << beta(i) << std::endl;
+//        }
+
+//        ofs.close();
+//    }
+
+
+
 }
 
 template <typename RANDOMFOREST>

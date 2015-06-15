@@ -234,6 +234,7 @@ protected:
         index_type parent;
         index_type left_child;
         index_type right_child;
+        mutable size_t leaf_index; // index of the node in the leaf_ids_ vector
     };
 
     // arc_id = 2*source_node_id + x
@@ -249,8 +250,6 @@ protected:
     mutable bool root_changed_;
     mutable std::vector<size_t> leaf_ids_; // vector with the node ids of all leaf nodes
     mutable bool leaves_changed_;
-    mutable NodeMap<size_t> leaf_indices_; // leaf node map that stores the index in the leaf_ids_ vector
-
 };
 
 inline BinaryTree::BinaryTree()
@@ -262,8 +261,7 @@ inline BinaryTree::BinaryTree()
       root_node_(0),
       root_changed_(false),
       leaf_ids_(),
-      leaves_changed_(true),
-      leaf_indices_()
+      leaves_changed_(true)
 {}
 
 inline BinaryTree::Node BinaryTree::addNode()
@@ -620,13 +618,12 @@ inline void BinaryTree::makeLeaves() const
     if (leaves_changed_)
     {
         leaf_ids_.clear();
-        leaf_indices_.clear();
         for (size_t i = 0; i < nodes_.size(); ++i)
         {
             if (outDegree(Node(i)) == 0)
             {
                 leaf_ids_.push_back(i);
-                leaf_indices_[Node(i)] = leaf_ids_.size()-1;
+                nodes_[i].leaf_index = leaf_ids_.size()-1;
             }
         }
     }
@@ -637,15 +634,14 @@ inline size_t BinaryTree::getLeafIndex(
         Node const & node
 ) const {
     makeLeaves();
-//    return leaf_indices_[node];
-    return leaf_indices_.at(node);
+    return nodes_[node.id()].leaf_index;
 }
 
 
 
 /// \brief Takes a vector of trees and provides the graph api.
 template <typename TREE>
-class ConstForestAdaptor
+class ForestAdaptor
 {
 public:
 
@@ -655,19 +651,21 @@ public:
     typedef typename Tree::Node TreeNode;
     // TODO: Implement the rest of the graph API.
 
+    // TODO: Maybe switch from raw pointers to std::shared_ptr.
+
     template <typename T>
     using NodeMap = detail::PropertyMap<Node, T>;
 
-    ConstForestAdaptor()
+    ForestAdaptor()
         : forest_()
     {}
 
-    ConstForestAdaptor(std::vector<Tree> const & forest)
+    ForestAdaptor(std::vector<Tree*> const & forest)
         : forest_(forest)
     {}
 
     /// \brief Setter for forest.
-    void set_forest(std::vector<Tree> const & forest)
+    void set_forest(std::vector<Tree*> const & forest)
     {
         forest_ = forest;
     }
@@ -677,10 +675,10 @@ public:
             size_t tree_index,
             TreeNode const & tree_node
     ) const {
-        size_t id = forest_[tree_index].getLeafIndex(tree_node);
+        size_t id = forest_[tree_index]->getLeafIndex(tree_node);
         for (size_t i = 0; i < tree_index; ++i)
         {
-            id += forest_[i].numLeaves();
+            id += forest_[i]->numLeaves();
         }
         return Node(id);
     }
@@ -694,14 +692,14 @@ public:
         size_t id = node.id();
         for (tree_index = 0; tree_index < forest_.size(); ++tree_index)
         {
-            if (id < forest_[tree_index].numLeaves())
+            if (id < forest_[tree_index]->numLeaves())
             {
-                tree_node = TreeNode(forest_[tree_index].getLeafNode(id));
+                tree_node = TreeNode(forest_[tree_index]->getLeafNode(id));
                 return;
             }
             else
             {
-                id -= forest_[tree_index].numLeaves();
+                id -= forest_[tree_index]->numLeaves();
             }
         }
         vigra_fail("ConstForestAdaptor::forest_to_tree(): The given node is not in the graph.");
@@ -711,9 +709,9 @@ public:
     size_t numLeaves() const
     {
         size_t num = 0;
-        for (auto const & tree : forest_)
+        for (auto const tree : forest_)
         {
-            num += tree.numLeaves();
+            num += tree->numLeaves();
         }
         return num;
     }
@@ -761,7 +759,7 @@ public:
 
 protected:
 
-    std::vector<Tree> forest_;
+    std::vector<Tree*> forest_;
 };
 
 
