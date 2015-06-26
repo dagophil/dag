@@ -1012,191 +1012,71 @@ void GloballyRefinedRandomForest<RANDOMFOREST>::train(
         weights = std::vector<double>(svm.beta().begin(), svm.beta().end()-1); // copy all weights but the bias weight
     }
 
-
-
-    // Do the pruning.
+    // Do the pruning:
+    size_t num_rounds = 20;
+    std::cout << "before pruning: " << weights.size() << " leaves" << std::endl;
+    std::cout << num_rounds << " rounds" << std::endl;
+    for (size_t k = 0; k < num_rounds; ++k)
     {
-        // Sort each pair of nodes by the l2 summation of their weights.
+        // Find pairs of adjacent leaves and sort the pairs by the sum of the squared weights.
         typedef std::pair<Node, Node> NodePair;
-        typedef std::pair<size_t, size_t> IndexPair;
-        std::vector<IndexPair> indices;
-        std::vector<size_t> sorted_indices;
-        std::vector<double> pair_weights_l2_sum;
-        std::cout << "sort the pairs" << std::endl;
+        std::vector<NodePair> pairs;
+        std::vector<size_t> indices;
         {
+            std::vector<double> pair_weights_l2_sum;
             for (size_t i = 0; i < weights.size(); ++i)
             {
-                if (i % 100 == 0)
-                    std::cout << (i+1) << " of " << weights.size() << std::endl;
-
-                for (size_t j = i+1; j < weights.size(); ++j)
+                Node const n0 = rf_adaptor_.getLeafNode(i);
+                Node const n1 = rf_adaptor_.neighbor(n0);
+                vigra_assert(rf_adaptor_.outDegree(n0) == 0, "GloballyRefinedRandomForest::train(): Somehow the leaf has out degree != 0.");
+                if (rf_adaptor_.valid(n1) && rf_adaptor_.outDegree(n1) == 0 && n0 < n1)
                 {
-                    indices.push_back(IndexPair(i, j));
+                    // note: the condition n0 < n1 is to prevent that both (n0, n1) and (n1, n0) occur in the pair vector
+                    size_t const j = rf_adaptor_.getLeafIndex(n1);
+                    pairs.push_back(NodePair(n0, n1));
                     pair_weights_l2_sum.push_back(weights[i]*weights[i] + weights[j]*weights[j]);
                 }
             }
-            sorted_indices.resize(indices.size());
-            std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
-            std::sort(sorted_indices.begin(), sorted_indices.end(),
+            indices.resize(pairs.size());
+            std::iota(indices.begin(), indices.end(), 0);
+            std::sort(indices.begin(), indices.end(),
                     [& pair_weights_l2_sum](size_t i, size_t j)
                     {
                         return pair_weights_l2_sum[i] < pair_weights_l2_sum[j];
                     }
             );
         }
-        std::cout << "done" << std::endl;
 
-        // Do the merging.
-        size_t const merge_count = 200;
-        for (size_t k = 0; k < merge_count; ++k)
+        // Merge a given percentage of the pairs.
+        size_t const merge_count = static_cast<size_t>(0.2 * pairs.size());
+        for (size_t c = 0; c < merge_count; ++c)
         {
-            auto const index_pair = indices[sorted_indices[0]];
-            sorted_indices.erase(sorted_indices.begin());
-            size_t const i = index_pair.first;
-            size_t const j = index_pair.second;
-            auto const merge_weight = weights[i] + weights[j];
-            weights.push_back(merge_weight);
+            Node const n0 = pairs[indices[c]].first;
+            Node const n1 = pairs[indices[c]].second;
+            size_t const i = rf_adaptor_.getLeafIndex(n0);
+            size_t const j = rf_adaptor_.getLeafIndex(n1);
+            double const merge_weight = weights[i] + weights[j];
 
-            vigra_assert(prune_map_.find(i) == prune_map_.end() &&
-                         prune_map_.find(j) == prune_map_.end(),
-                         "GloballyRefinedRandomForest::train(): Somehow the leaves are merged more than once.");
-            size_t const merge_index = weights.size()-1;
-            prune_map_[i] = merge_index;
-            prune_map_[j] = merge_index;
+            Node const parent = rf_adaptor_.getParent(n0);
+            rf_adaptor_.erase(n0);
+            rf_adaptor_.erase(n1);
+            size_t parent_index = rf_adaptor_.getLeafIndex(parent);
 
-            // Update the pairs and remove the pair from the index vector if it holds the same node twice.
-            for (auto it = sorted_indices.begin(); it != sorted_indices.end(); )
+            if (i < j)
             {
-                size_t const c = *it;
-                bool update = false;
-                auto & p = indices[c];
-                if (p.first == i || p.first == j)
-                {
-                    p.first = merge_index;
-                    update = true;
-                }
-                if (p.second == i || p.second == j)
-                {
-                    p.second = merge_index;
-                    update = true;
-                }
-
-                if (p.first == p.second)
-                {
-                    sorted_indices.erase(it);
-                }
-                else
-                {
-                    if (update)
-                    {
-                        // Resort the index vector.
-                        pair_weights_l2_sum[c] = weights[p.first]*weights[p.first] + weights[p.second]*weights[p.second];
-                        auto it2 = std::lower_bound(sorted_indices.begin(), sorted_indices.end(), pair_weights_l2_sum[c],
-                                [& pair_weights_l2_sum](size_t ind, double v)
-                                {
-                                    return pair_weights_l2_sum[ind] < v;
-                                }
-                        );
-
-                        if (it < it2)
-                        {
-                            std::rotate(it, it+1, it2);
-                            it = sorted_indices.begin()+c;
-                        }
-                        else if (it > it2)
-                        {
-                            std::rotate(it2, it, it+1);
-                        }
-                        else
-                        {
-                            ++it;
-                        }
-                    }
-                    else
-                    {
-                        ++it;
-                    }
-                }
+                weights.erase(weights.begin()+j);
+                weights.erase(weights.begin()+i);
             }
+            else
+            {
+                weights.erase(weights.begin()+i);
+                weights.erase(weights.begin()+j);
+            }
+
+            weights.insert(weights.begin()+parent_index, merge_weight);
         }
     }
-
-
-
-
-//    // Do the pruning:
-//    size_t num_rounds = 20;
-//    std::cout << num_rounds << " rounds" << std::endl;
-//    for (size_t k = 0; k < num_rounds; ++k)
-//    {
-//        // Find pairs of adjacent leaves and sort the pairs by the sum of the squared weights.
-//        typedef std::pair<Node, Node> NodePair;
-//        std::vector<NodePair> pairs;
-//        std::vector<size_t> indices;
-//        {
-//            std::vector<double> pair_weights_l2_sum;
-//            for (size_t i = 0; i < weights.size(); ++i)
-//            {
-//                Node const n0 = rf_adaptor_.getLeafNode(i);
-//                Node const n1 = rf_adaptor_.neighbor(n0);
-//                vigra_assert(rf_adaptor_.outDegree(n0) == 0, "GloballyRefinedRandomForest::train(): Somehow the leaf has out degree != 0.");
-//                if (rf_adaptor_.valid(n1) && rf_adaptor_.outDegree(n1) == 0 && n0 < n1)
-//                {
-//                    // note: the condition n0 < n1 is to prevent that both (n0, n1) and (n1, n0) occur in the pair vector
-//                    size_t const j = rf_adaptor_.getLeafIndex(n1);
-//                    pairs.push_back(NodePair(n0, n1));
-//                    pair_weights_l2_sum.push_back(weights[i]*weights[i] + weights[j]*weights[j]);
-//                }
-//            }
-//            indices.resize(pairs.size());
-//            std::iota(indices.begin(), indices.end(), 0);
-//            std::sort(indices.begin(), indices.end(),
-//                    [& pair_weights_l2_sum](size_t i, size_t j)
-//                    {
-//                        return pair_weights_l2_sum[i] < pair_weights_l2_sum[j];
-//                    }
-//            );
-//        }
-
-//        // Merge a given percentage of the pairs.
-//        size_t const merge_count = static_cast<size_t>(0.2 * pairs.size());
-////        size_t counter = 0;
-//        for (size_t c = 0; c < merge_count; ++c)
-//        {
-//            Node const n0 = pairs[indices[c]].first;
-//            Node const n1 = pairs[indices[c]].second;
-//            size_t const i = rf_adaptor_.getLeafIndex(n0);
-//            size_t const j = rf_adaptor_.getLeafIndex(n1);
-//            double const merge_weight = weights[i] + weights[j];
-
-////            if (weights[i] * weights[j] < 0)
-////            {
-////                ++counter;
-////            }
-
-//            Node const parent = rf_adaptor_.getParent(n0);
-//            rf_adaptor_.erase(n0);
-//            rf_adaptor_.erase(n1);
-//            size_t parent_index = rf_adaptor_.getLeafIndex(parent);
-
-//            if (i < j)
-//            {
-//                weights.erase(weights.begin()+j);
-//                weights.erase(weights.begin()+i);
-//            }
-//            else
-//            {
-//                weights.erase(weights.begin()+i);
-//                weights.erase(weights.begin()+j);
-//            }
-
-//            weights.insert(weights.begin()+parent_index, merge_weight);
-//        }
-
-////        std::cout << counter << " of " << merge_count << " leaves had different classes" << std::endl;
-//    }
-
-
+    std::cout << "after pruning: " << weights.size() << " leaves" << std::endl;
 
     // Save the produced leaf weights.
     svm_weights_.resize(rf_.num_trees());
